@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "replaylens"
+version = "0.1.0"
+description = "Record real AI-agent runs, replay them against a new prompt/model, and see exactly what behaves differently (tool calls, cost, speed)."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+
+[project.scripts]
+replaylens = "replaylens.cli:main"
+
+[tool.setuptools]
+packages = ["replaylens"]
