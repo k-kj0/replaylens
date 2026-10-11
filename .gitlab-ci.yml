@@ -1,0 +1,17 @@
+# GitLab CI template: fail the merge request if the agent regressed.
+replaylens:
+  image: python:3.11
+  script:
+    - pip install -e .
+    - python -m examples.refund_bot          # swap for your committed runs.jsonl
+    - >
+      python -m replaylens replay runs.jsonl
+      --agent examples.refund_bot:run_agent
+      --prompt examples/prompts/v3_polite.txt
+      --mock --rules examples/rules.json
+      --fail-on-regression
+  artifacts:
+    when: always
+    paths: [report.html]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
