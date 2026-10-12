@@ -6,47 +6,86 @@ and see exactly what behaves differently, especially which *tools* the agent now
 
 ## Quickstart (2 minutes, no API key)
 
-    pip install -e .
-    python -m examples.refund_bot
-    python -m replaylens replay runs.jsonl --agent examples.refund_bot:run_agent \
-        --prompt examples/prompts/v2_fast.txt --mock --rules examples/rules.json
-    # open report.html
+```bash
+git clone https://github.com/k-kj0/replaylens && cd replaylens
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+python -m examples.refund_bot          # records 30 demo runs
+python -m replaylens replay runs.jsonl --agent examples.refund_bot:run_agent \
+  --prompt examples/prompts/p2_fast.txt --mock --rules examples/rules.json
+# open report.html in your browser
+```
 
-## Why
-Most teams test a prompt change on 5 examples by hand. ReplayLens re-runs *all* recorded runs
-and compares tool calls and arguments, cost, latency, compliance rules, and (optionally) an LLM judge.
+## How it works
+1. **Record**: add `@record` above your agent function. Every run is saved to `runs.jsonl`.
+2. **Replay**: change the prompt or model; one command re-asks every saved question.
+3. **Compare**: you get a SAFE / NOT SAFE verdict, per-run tool-call diffs, and cost and latency change.
 
-## Example result (demo refund bot, 30 recorded runs)
+## Run the 5 different prompts (5 people, or one person 5 times)
 
-| change | regressions | cost | latency | verdict |
-|---|---|---|---|---|
-| polite prompt | 0 / 30 | +0.0% | ~0% | SAFE |
-| "be fast, skip steps" prompt | 22 / 30 | -35% | -26% | NOT SAFE (skips order lookup) |
-| cheaper model | 8 / 30 | -62.6% | -59.0% | NOT SAFE (wrong tool on status questions) |
+The five prompt files live in `examples/prompts/`. Each tester picks one and changes only the file name.
 
-## Works with any OpenAI-compatible endpoint
+| # | Prompt file | What it does | Expected on the built-in mock |
+|---|---|---|---|
+| 1 | `p1_baseline.txt` | Original prompt (control) | SAFE, 30 of 30 same |
+| 2 | `p2_fast.txt` | "Skip extra steps", bot skips the order check | NOT SAFE, 22 of 30 regress |
+| 3 | `p3_polite.txt` | Only the tone changes | SAFE, 30 of 30 same |
+| 4 | `p4_guarantee.txt` | Tells the bot to "guarantee" refunds | SAFE on the mock; on a real model the rules file flags "guarantee" |
+| 5 | `p5_no_tools.txt` | "Never use tools" | NOT SAFE, 22 of 30 regress |
 
-    export OPENAI_API_KEY=...
-    python -m replaylens replay runs.jsonl --agent my_pkg.agent:run_agent --prompt new.txt \
-        --model <model-name> --base-url <provider-url> --price-in <usd> --price-out <usd>
+One tester, one prompt:
+
+```bash
+python -m replaylens replay runs.jsonl --agent examples.refund_bot:run_agent \
+  --prompt examples/prompts/p3_polite.txt --mock --rules examples/rules.json
+```
+
+All five in one go:
+
+```bash
+for p in p1_baseline p2_fast p3_polite p4_guarantee p5_no_tools; do
+  echo "== $p"
+  python -m replaylens replay runs.jsonl --agent examples.refund_bot:run_agent \
+    --prompt examples/prompts/$p.txt --mock --rules examples/rules.json \
+    --out /tmp/$p.json --html /tmp/$p.html | grep -E "Out of|VERDICT"
+done
+```
+
+Each run writes `report.html`: filter by regressions / same / improved and see old and new answers side by side.
+
+## Use a real model (any OpenAI-compatible endpoint)
+
+```bash
+pip install openai
+export OPENAI_BASE_URL=https://api.groq.com/openai/v1   # or Together, Runpod, OpenRouter...
+export OPENAI_API_KEY=your_key
+PYTHONPATH=. python scripts/record_real.py MODEL_NAME     # records 10 real runs
+python -m replaylens replay runs.jsonl --agent examples.refund_bot:run_agent \
+  --prompt examples/prompts/p2_fast.txt --rules examples/rules.json
+```
+
+Tested on Groq (`openai/gpt-oss-120b`): the "skip the lookup" prompt was flagged as a regression
+in 6 of 10 real runs. See `docs/real-run-report.html`. Never commit your `.env` file.
 
 ## Benchmark several models on the same runs
 
-    python -m replaylens benchmark runs.jsonl --agent examples.refund_bot:run_agent \
-        --prompt examples/prompts/v1.txt --models good-model,cheap-model --mock
+```bash
+python -m replaylens benchmark runs.jsonl --agent examples.refund_bot:run_agent \
+  --prompt examples/prompts/p1_baseline.txt --models good-model,cheap-model --mock
+```
 
-## CI
-GitHub: `.github/workflows/replay.yml`. GitLab: `.gitlab-ci.yml`.
-`--fail-on-regression` makes the pull request or merge request fail.
+Prints a table (regressions, cost, latency per model) and writes `benchmark.md`.
+
+## Use in CI
+- **GitHub**: `.github/workflows/replay.yml`
+- **GitLab**: `.gitlab-ci.yml`
+
+`--fail-on-regression` makes the pull request or merge request fail when the agent regresses.
+
+## Rules (compliance checks)
+`examples/rules.json` lists phrases the agent must never say (or must say). A new violation counts as a regression.
 
 ## Honest limits (v0.1)
-Single-turn conversations, sequential tool loop, text only (voice agents: replay transcripts).
-The demo uses a built-in fake model; real-provider runs depend on your endpoint.
-Similar projects exist (langgraph-replay, replayd, ProxyTrace). ReplayLens aims to be the
-zero-setup, any-endpoint, tool-call-diff + compliance-rules option.
-EOF
-
-git rm -q poetry.lock
-git add README.md
-git commit -m "Full README, remove template lockfile"
-git push origin main
+Single-turn conversations, sequential tool loop, text only (for voice agents, replay transcripts).
+Latency numbers from free-tier APIs are noisy. Similar projects exist (langgraph-replay, replayd, ProxyTrace);
+ReplayLens aims to be the zero-setup, any-endpoint tool with tool-call diffs and compliance rules.
