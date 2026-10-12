@@ -6,3 +6,4 @@ report*.html
 .venv/
 dist/
 *.egg-info/
+.env

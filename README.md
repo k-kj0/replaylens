@@ -1,4 +1,3 @@
-cat > README.md <<'EOF'
 # ReplayLens
 
 **A flight recorder + replay button for AI agents.**
