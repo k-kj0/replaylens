@@ -7,3 +7,4 @@ report*.html
 dist/
 *.egg-info/
 .env
+.env
