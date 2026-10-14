@@ -1,27 +1,29 @@
 import json
 
+
 def load_runs(path):
-    """Same as recorder.load_runs, but gives rows without an id their line index."""
     runs = []
     with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                row = json.loads(line)
-                row.setdefault("id", len(runs))
-                runs.append(row)
+        for i, line in enumerate(l for l in f if l.strip()):
+            row = json.loads(line)
+            row["id"] = i            # recorder.py writes no id, so use line number (int)
+            runs.append(row)
     return runs
 
+
 def normalize(run):
+    """Matches the row format written by recorder.make_row()."""
     return {
-        "id": run.get("id"),
+        "id": str(run.get("id", "")),
+        "ts": run.get("ts", ""),
         "input": run.get("input", ""),
         "output": run.get("output", ""),
         "tool_calls": run.get("tool_calls") or [],
         "model": run.get("model", "unknown"),
-        "cost": run.get("cost_usd", 0.0),
-        "latency": (run.get("latency_ms") or 0) / 1000.0,   # seconds
-        "tokens_in": run.get("tokens_in", 0),
-        "tokens_out": run.get("tokens_out", 0),
+        "prompt_version": run.get("prompt_version", ""),
+        "cost": float(run.get("cost_usd") or 0.0),
+        "latency": float(run.get("latency_ms") or 0) / 1000.0,   # seconds
+        "tokens_in": int(run.get("tokens_in") or 0),
+        "tokens_out": int(run.get("tokens_out") or 0),
         "error": run.get("error"),
     }
