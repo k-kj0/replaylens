@@ -1,0 +1,56 @@
+name: "ReplayLens regression gate"
+description: "Replay recorded agent runs against a new prompt or model and fail the build if the agent regresses."
+author: "k-kj0"
+branding:
+  icon: rewind
+  color: blue
+
+inputs:
+  runs:
+    description: "Path to the recorded runs file (runs.jsonl)"
+    required: true
+  agent:
+    description: "Your agent as module:function, e.g. examples.refund_bot:run_agent"
+    required: true
+  prompt:
+    description: "Path to the prompt file to test"
+    required: true
+  rules:
+    description: "Path to a rules JSON file (optional)"
+    required: false
+    default: ""
+  mock:
+    description: "Use the built-in mock model instead of a real endpoint (true/false)"
+    required: false
+    default: "false"
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.11"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install ReplayLens
+      shell: bash
+      run: pip install "${{ github.action_path }}"
+
+    - name: Replay and gate on regressions
+      shell: bash
+      env:
+        RUNS: ${{ inputs.runs }}
+        AGENT: ${{ inputs.agent }}
+        PROMPT: ${{ inputs.prompt }}
+        RULES: ${{ inputs.rules }}
+        MOCK: ${{ inputs.mock }}
+        PYTHONPATH: ${{ github.workspace }}
+      run: |
+        args=(replay "$RUNS" --agent "$AGENT" --prompt "$PROMPT" --fail-on-regression)
+        if [ -n "$RULES" ]; then args+=(--rules "$RULES"); fi
+        if [ "$MOCK" = "true" ]; then args+=(--mock); fi
+        python -m replaylens "${args[@]}"
