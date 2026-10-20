@@ -1,0 +1,4 @@
+{
+  "must_not_contain": ["approved", "you are covered", "guarantee"],
+  "must_contain_any": []
+}
