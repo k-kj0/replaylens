@@ -12,6 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 openai = ["openai>=1.0"]
+test = ["pytest>=8.0"]
 
 [project.scripts]
 replaylens = "replaylens.cli:main"
