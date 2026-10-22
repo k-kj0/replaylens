@@ -1,22 +1,41 @@
 name: replaylens
-on: [pull_request]
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
 jobs:
   replay:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: pip install -e .
-      - name: Record demo runs (swap this for your real runs.jsonl committed to the repo)
+        with:
+          python-version: "3.11"
+
+      - name: Install ReplayLens and test dependencies
+        run: python -m pip install -e ".[test]"
+
+      - name: Run regression tests
+        run: python -m pytest -q
+
+      - name: Record demo runs
         run: python -m examples.refund_bot
-      - name: Replay with the prompt in this pull request
+
+      - name: Replay demo runs
         run: >
           python -m replaylens replay runs.jsonl
           --agent examples.refund_bot:run_agent
           --prompt examples/prompts/v3_polite.txt
-          --mock --rules examples/rules.json
+          --mock
+          --rules examples/rules.json
           --fail-on-regression
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload replay report
+        uses: actions/upload-artifact@v4
         if: always()
-        with: { name: replaylens-report, path: "report.html" }
+        with:
+          name: replaylens-report
+          path: report.html
