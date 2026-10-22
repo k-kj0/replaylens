@@ -20,9 +20,7 @@ Changing a prompt or swapping in a cheaper model can silently change which tools
 | Refund bot (single turn) | "Skip extra steps" prompt | NOT SAFE: 22 of 30 runs regress |
 | Insurance claim intake (multi-turn) | "Skip verification, be confident" prompt | NOT SAFE: 18 of 28 turns regress |
 
-The insurance run catches two kinds of damage at once: the agent stops looking up the policy before talking about coverage (a tool-call regression), and it starts telling customers things like "approved" (a compliance-rule violation).
-
-![Insurance replay report](docs/insurance-report.png)
+The insurance run catches two kinds of damage at once: the agent stops looking up the policy before talking about coverage (a tool-call regression), and it starts telling customers things like "approved" (a compliance-rule violation). See the [case study](docs/case-study-insurance-claims.md).
 
 ---
 
@@ -76,7 +74,7 @@ Then replay with `--agent your_module:my_agent`.
 
 ## Multi-turn conversations (insurance claim example)
 
-Real conversations go back and forth. ReplayLens handles this by recording **one row per customer turn**, where the row's input is the whole conversation so far. Replaying re-tests every turn in context.
+Real conversations go back and forth. ReplayLens records **one row per customer turn**, where the row's input is the whole conversation so far. Replaying re-tests every turn in context.
 
 The example in `examples/insurance_claims/` is a claim-intake agent that must:
 
@@ -103,6 +101,31 @@ python -m replaylens replay runs_insurance.jsonl \
 
 The agent in this example is scripted, so it needs no API key. Swap in a real model for your own agent.
 
+## CI gate with latency and cost limits
+
+`replaylens.gate` replays recorded runs and exits with code 1 if the change is not safe, so it can fail a pull request.
+
+```bash
+python -m replaylens.gate runs_insurance.jsonl \
+  --agent examples.insurance_claims.agent:run_agent \
+  --prompt examples/insurance_claims/prompts/skip_checks.txt \
+  --rules examples/insurance_claims/rules.json \
+  --max-regress-rate 0.0 --max-p95-increase 20 --max-cost-increase 20
+echo $?     # 0 = SAFE, 1 = NOT SAFE, 2 = bad usage
+```
+
+It fails when any of these happen: tool calls change, a new rule violation appears, p95 latency rises more than `--max-p95-increase` percent (changes under `--min-abs-ms`, default 50 ms, are ignored to avoid noise), or total cost rises more than `--max-cost-increase` percent. `--out result.json` saves the full result.
+
+## Smaller run files (prefix deltas)
+
+Multi-turn rows repeat the whole conversation so far, so files grow fast. `replaylens.delta` stores only each turn's new text plus a pointer to the earlier row, and checks that decoding returns the exact original.
+
+```bash
+python -m replaylens.delta runs_insurance.jsonl --out runs_insurance.delta.jsonl
+```
+
+The saving grows with conversation length. Measure it on your own runs.
+
 ---
 
 ## Try 5 different prompts
@@ -116,17 +139,6 @@ The five prompt files live in `examples/prompts/`. Each tester picks one and cha
 | 3 | `p3_polite.txt` | Only the tone changes | SAFE, 30 of 30 same |
 | 4 | `p4_guarantee.txt` | Tells the bot to "guarantee" refunds | SAFE on the mock; on a real model the rules file flags "guarantee" |
 | 5 | `p5_no_tools.txt` | "Never use tools" | NOT SAFE, 22 of 30 regress |
-
-All five in one go:
-
-```bash
-for p in p1_baseline p2_fast p3_polite p4_guarantee p5_no_tools; do
-  echo "== $p"
-  python -m replaylens replay runs.jsonl --agent examples.refund_bot:run_agent \
-    --prompt examples/prompts/$p.txt --mock --rules examples/rules.json \
-    --out /tmp/$p.json --html /tmp/$p.html | grep -E "Out of|VERDICT"
-done
-```
 
 ## Use a real model (any OpenAI-compatible endpoint)
 
@@ -182,17 +194,10 @@ A rules file lists phrases the agent must never say (or must say). A new violati
 
 Examples: `examples/rules.json` (refund bot) and `examples/insurance_claims/rules.json`.
 
-## Case studies
-
-Short write-ups of what ReplayLens catches:
-
-- [Insurance claim intake agent](docs/case-study-insurance-claims.md)
-- [Real-model run](docs/real-model-run.md)
-
 ## Project layout
 
 ```
-replaylens/            the library (recorder, replayer, compare, report, judge, noise, otel...)
+replaylens/            the library (recorder, replayer, gate, delta, compare, report, judge, noise, otel...)
 examples/              runnable demo agents, prompts and rules
   refund_bot.py        single-turn demo
   insurance_claims/    multi-turn demo
@@ -207,6 +212,7 @@ action.yml             GitHub Action
 
 - **Multi-turn is turn-by-turn.** Each turn is replayed with the *recorded* history, so ReplayLens tests what your new prompt does next in the same situation. It does not re-simulate a whole conversation where the agent's new replies change what the customer would have said.
 - The agent must follow the `record` format shown above (`output`, `tool_calls`, token counts).
+- `replaylens.gate` checks tool calls, rule phrases, p95 latency and cost. Latency from mock agents is near zero, so use real-model runs for latency limits.
 - Text only. For voice agents, replay the transcripts.
 - Latency numbers from free-tier APIs are noisy.
 - The insurance example uses a scripted agent, so its numbers show how the tool behaves, not how a particular real model behaves.
