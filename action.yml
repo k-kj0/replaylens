@@ -1,30 +1,36 @@
 name: "ReplayLens regression gate"
 description: "Replay recorded agent runs against a new prompt or model and fail the build if the agent regresses."
 author: "k-kj0"
+
 branding:
   icon: rewind
   color: blue
 
 inputs:
   runs:
-    description: "Path to the recorded runs file (runs.jsonl)"
+    description: "Path to the recorded runs file, relative to the repository workspace"
     required: true
+
   agent:
-    description: "Your agent as module:function, e.g. examples.refund_bot:run_agent"
+    description: "Agent import path, e.g. examples.refund_bot:run_agent"
     required: true
+
   prompt:
     description: "Path to the prompt file to test"
     required: true
+
   rules:
-    description: "Path to a rules JSON file (optional)"
+    description: "Path to a rules JSON file, if applicable"
     required: false
     default: ""
+
   mock:
-    description: "Use the built-in mock model instead of a real endpoint (true/false)"
+    description: "Use the built-in mock model instead of a real endpoint"
     required: false
     default: "false"
+
   python-version:
-    description: "Python version to use"
+    description: "Python version"
     required: false
     default: "3.11"
 
@@ -38,19 +44,39 @@ runs:
 
     - name: Install ReplayLens
       shell: bash
-      run: pip install "${{ github.action_path }}"
+      env:
+        REPLAYLENS_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        python -m pip install --upgrade pip
+        python -m pip install "$REPLAYLENS_ACTION_PATH"
 
-    - name: Replay and gate on regressions
+    - name: Replay and check for regressions
       shell: bash
       env:
-        RUNS: ${{ inputs.runs }}
-        AGENT: ${{ inputs.agent }}
-        PROMPT: ${{ inputs.prompt }}
-        RULES: ${{ inputs.rules }}
-        MOCK: ${{ inputs.mock }}
+        REPLAYLENS_RUNS: ${{ inputs.runs }}
+        REPLAYLENS_AGENT: ${{ inputs.agent }}
+        REPLAYLENS_PROMPT: ${{ inputs.prompt }}
+        REPLAYLENS_RULES: ${{ inputs.rules }}
+        REPLAYLENS_MOCK: ${{ inputs.mock }}
         PYTHONPATH: ${{ github.workspace }}
       run: |
-        args=(replay "$RUNS" --agent "$AGENT" --prompt "$PROMPT" --fail-on-regression)
-        if [ -n "$RULES" ]; then args+=(--rules "$RULES"); fi
-        if [ "$MOCK" = "true" ]; then args+=(--mock); fi
+        set -euo pipefail
+
+        args=(
+          replay
+          "$REPLAYLENS_RUNS"
+          --agent "$REPLAYLENS_AGENT"
+          --prompt "$REPLAYLENS_PROMPT"
+          --fail-on-regression
+        )
+
+        if [[ -n "$REPLAYLENS_RULES" ]]; then
+          args+=(--rules "$REPLAYLENS_RULES")
+        fi
+
+        if [[ "$REPLAYLENS_MOCK" == "true" ]]; then
+          args+=(--mock)
+        fi
+
         python -m replaylens "${args[@]}"
