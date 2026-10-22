@@ -1,4 +1,3 @@
-cat > docs/case-study-insurance-claims.md << 'EOF'
 # Case study: insurance claim intake agent
 
 A voice or chat agent takes a first report of loss. A prompt change must not make it skip steps.
@@ -14,9 +13,6 @@ A voice or chat agent takes a first report of loss. A prompt change must not mak
 ## Result
 - 28 turns replayed: 10 same, 18 regressed
 - Verdict: NOT SAFE TO SHIP
-- Skipping the policy lookup and saying "approved" were both caught.
-
-![Report](insurance-report.png)
+- Both problems were caught: the skipped policy lookup and the "approved" wording.
 
 Reproduce it: see "Multi-turn conversations" in the README.
-EOF
