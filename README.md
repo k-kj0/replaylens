@@ -1,223 +1,172 @@
 # ReplayLens
 
-**A flight recorder + replay button for AI agents.**
-Change a prompt or switch to a cheaper model, replay your real past conversations, and see exactly what behaves differently, especially which tools the agent now calls.
+**AI agent quality and regression testing — compare runs, track changes, and review release readiness.**
 
-No account. No hosted service. One command, one verdict: **SAFE** or **NOT SAFE TO SHIP**.
+ReplayLens helps developers evaluate changes between versions of an AI agent or prompt by summarizing reported test outcomes, regressions, cost changes, and latency changes.
 
----
+The project includes automated Python checks and a lightweight dashboard for reviewing a report.
 
-## Why
-
-Changing a prompt or swapping in a cheaper model can silently change which tools an agent calls or what it says to customers. Unit tests don't catch that, because the agent still "works". ReplayLens replays your real past conversations against the change and tells you exactly what behaves differently.
-
-**Built for:** teams shipping agents (support, voice, finance, insurance, healthcare) who need a SAFE / NOT SAFE gate in CI before a prompt or model change goes out.
-
-## See it in 30 seconds
-
-| Example | Change tested | Result |
-|---|---|---|
-| Refund bot (single turn) | "Skip extra steps" prompt | NOT SAFE: 22 of 30 runs regress |
-| Insurance claim intake (multi-turn) | "Skip verification, be confident" prompt | NOT SAFE: 18 of 28 turns regress |
-
-The insurance run catches two kinds of damage at once: the agent stops looking up the policy before talking about coverage (a tool-call regression), and it starts telling customers things like "approved" (a compliance-rule violation). See the [case study](docs/case-study-insurance-claims.md).
+**[View the Dashboard](https://k-kj0.github.io/replaylens/)** · **[View the Source Code](https://github.com/k-kj0/replaylens)**
 
 ---
 
-## Install
+## Overview
+
+AI agent behavior can change when prompts, models, or application logic are updated. A change may improve one outcome while introducing a regression elsewhere.
+
+ReplayLens is a small project focused on making those changes easier to review.
+
+It presents report information such as:
+
+- Total runs included in a report
+- Reported regressions, unchanged runs, improvements, and other changes
+- Previous and new prompt or version identifiers
+- Reported cost and latency changes
+- A JSON export of the displayed report summary
+
+## Dashboard Preview
+
+The dashboard displays a report snapshot with a high-level quality summary, a version comparison, performance changes, and a run breakdown.
+
+It also explains when individual run records are unavailable rather than displaying fabricated examples.
+
+**Important:** The published dashboard currently displays a static report snapshot. It does not automatically collect new runs, connect to a live AI agent, or update itself when a new report is generated.
+
+## Example Report
+
+The current dashboard snapshot contains the following reported results:
+
+| Metric | Reported result |
+|---|---:|
+| Total runs | 30 |
+| Regressions | 0 |
+| Same | 30 |
+| Improved | 0 |
+| Changed | 0 |
+| Cost change | −0.2% |
+| Latency change | −0.2% |
+| Reported outcome | SAFE TO SHIP |
+
+**Compared versions**
+
+- Previous: `good-model / v1.txt`
+- New: `good-model / v3_polite.txt`
+
+These values describe the supplied report snapshot, not a guarantee that every possible agent interaction is safe or correct.
+
+## Features
+
+### Report summary
+Review the overall results without having to interpret every metric separately.
+
+### Version comparison
+See which previous and new prompt or version identifiers were compared.
+
+### Regression visibility
+Review the regression count and other reported outcome categories.
+
+### Performance metrics
+See reported changes in cost and latency.
+
+### JSON export
+Export the summary displayed on the dashboard for further inspection or use in another tool.
+
+### Automated checks
+Use GitHub Actions to run the project's Python checks and deploy the static dashboard.
+
+## Project Structure
+
+```text
+replaylens/
+├── .github/
+│   └── workflows/
+│       ├── replay.yml
+│       └── static.yml
+├── dashboard/
+│   └── index.html
+├── tests/
+├── README.md
+└── pyproject.toml
+```
+
+The `tests/` directory and `pyproject.toml` are shown as the expected locations for tests and Python project configuration. Check the repository before relying on these paths; adjust this tree if your actual files differ.
+
+## Getting Started
+
+### View the dashboard
+
+Open the published dashboard:
+
+https://k-kj0.github.io/replaylens/
+
+### Get the source code
+
+Clone the repository:
 
 ```bash
-pip install git+https://github.com/k-kj0/replaylens@v0.1.0
+git clone https://github.com/k-kj0/replaylens.git
+cd replaylens
 ```
 
-## Quickstart (2 minutes, no API key)
+### Run the Python checks
+
+This project uses Python checks in GitHub Actions. The exact local commands depend on the dependencies and test configuration in the repository.
+
+If the project uses `pytest` and the required dependencies are installed, run:
 
 ```bash
-git clone https://github.com/k-kj0/replaylens && cd replaylens
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
-pip install -e .
-python -m examples.refund_bot          # records 30 demo runs
-python -m replaylens replay runs.jsonl --agent examples.refund_bot:run_agent \
-  --prompt examples/prompts/p2_fast.txt --mock --rules examples/rules.json
-# open report.html in your browser
+python -m pytest
 ```
 
-## How it works
+If dependencies are declared in `pyproject.toml`, follow the installation instructions defined there before running the tests.
 
-1. **Record:** add `@record` above your agent function. Every run is saved as one line in `runs.jsonl`.
-2. **Replay:** change the prompt or model. One command re-asks every saved input.
-3. **Compare:** you get a SAFE / NOT SAFE verdict, per-run tool-call diffs, and the cost and latency change.
+## Continuous Integration and Deployment
 
-Each replay writes `report.html`: filter by regressions / same / improved and see old and new answers side by side.
+ReplayLens uses GitHub Actions for two workflows:
 
-## Record your own agent
+- **Python checks:** runs the configured automated checks.
+- **Dashboard deployment:** publishes the static dashboard through GitHub Pages.
 
-Your agent only needs to look like this:
+Both workflows have passed for the current dashboard update.
 
-```python
-from replaylens.recorder import record
+Workflow results are available in the [GitHub Actions tab](https://github.com/k-kj0/replaylens/actions).
 
-@record(path="runs.jsonl", prompt_version="v1")
-def my_agent(user_input, *, model, system_prompt):
-    ...
-    return {
-        "output": "text the customer sees",
-        "tool_calls": [{"name": "lookup_order", "arguments": {"id": "ORD-1001"}}],
-        "tokens_in": 120,
-        "tokens_out": 45,
-    }
-```
+## Current Limitations
 
-Then replay with `--agent your_module:my_agent`.
+ReplayLens is under development. The current published dashboard is a report-viewing prototype rather than a complete, live regression-testing service.
 
----
+Currently:
 
-## Multi-turn conversations (insurance claim example)
+- The dashboard displays one predefined report snapshot.
+- Individual run records are not included in the displayed report.
+- New test runs are not automatically collected by the dashboard.
+- The report summary does not independently verify model quality or production safety.
+- Automated checks validate only the behavior covered by the project's configured tests.
 
-Real conversations go back and forth. ReplayLens records **one row per customer turn**, where the row's input is the whole conversation so far. Replaying re-tests every turn in context.
+## Potential Next Steps
 
-The example in `examples/insurance_claims/` is a claim-intake agent that must:
+Possible future improvements include:
 
-- look up the policy before discussing coverage,
-- never say "approved", "you are covered" or "guarantee",
-- hand off to a human if anyone is injured.
+- Loading reports from generated JSON files.
+- Displaying individual test-run details and before/after outputs.
+- Adding filters for regression outcomes.
+- Comparing multiple reports over time.
+- Integrating report generation into an automated evaluation workflow.
 
-```bash
-python -m examples.insurance_claims.agent        # records 10 conversations (28 turns)
+These are potential improvements, not features currently claimed as implemented.
 
-# Good prompt: expect SAFE
-python -m replaylens replay runs_insurance.jsonl \
-  --agent examples.insurance_claims.agent:run_agent \
-  --prompt examples/insurance_claims/prompts/good.txt \
-  --mock --rules examples/insurance_claims/rules.json
+## Contributing
 
-# Bad prompt: expect NOT SAFE
-python -m replaylens replay runs_insurance.jsonl \
-  --agent examples.insurance_claims.agent:run_agent \
-  --prompt examples/insurance_claims/prompts/skip_checks.txt \
-  --mock --rules examples/insurance_claims/rules.json \
-  --html docs/insurance-report.html
-```
+Contributions, bug reports, and suggestions are welcome.
 
-The agent in this example is scripted, so it needs no API key. Swap in a real model for your own agent.
-
-## CI gate with latency and cost limits
-
-`replaylens.gate` replays recorded runs and exits with code 1 if the change is not safe, so it can fail a pull request.
-
-```bash
-python -m replaylens.gate runs_insurance.jsonl \
-  --agent examples.insurance_claims.agent:run_agent \
-  --prompt examples/insurance_claims/prompts/skip_checks.txt \
-  --rules examples/insurance_claims/rules.json \
-  --max-regress-rate 0.0 --max-p95-increase 20 --max-cost-increase 20
-echo $?     # 0 = SAFE, 1 = NOT SAFE, 2 = bad usage
-```
-
-It fails when any of these happen: tool calls change, a new rule violation appears, p95 latency rises more than `--max-p95-increase` percent (changes under `--min-abs-ms`, default 50 ms, are ignored to avoid noise), or total cost rises more than `--max-cost-increase` percent. `--out result.json` saves the full result.
-
-## Smaller run files (prefix deltas)
-
-Multi-turn rows repeat the whole conversation so far, so files grow fast. `replaylens.delta` stores only each turn's new text plus a pointer to the earlier row, and checks that decoding returns the exact original.
-
-```bash
-python -m replaylens.delta runs_insurance.jsonl --out runs_insurance.delta.jsonl
-```
-
-The saving grows with conversation length. Measure it on your own runs.
-
----
-
-## Try 5 different prompts
-
-The five prompt files live in `examples/prompts/`. Each tester picks one and changes only the file name.
-
-| # | Prompt file | What it does | Expected on the built-in mock |
-|---|---|---|---|
-| 1 | `p1_baseline.txt` | Original prompt (control) | SAFE, 30 of 30 same |
-| 2 | `p2_fast.txt` | "Skip extra steps": bot skips the order check | NOT SAFE, 22 of 30 regress |
-| 3 | `p3_polite.txt` | Only the tone changes | SAFE, 30 of 30 same |
-| 4 | `p4_guarantee.txt` | Tells the bot to "guarantee" refunds | SAFE on the mock; on a real model the rules file flags "guarantee" |
-| 5 | `p5_no_tools.txt` | "Never use tools" | NOT SAFE, 22 of 30 regress |
-
-## Use a real model (any OpenAI-compatible endpoint)
-
-```bash
-pip install openai
-export OPENAI_BASE_URL=https://api.groq.com/openai/v1   # or Together, Runpod, OpenRouter...
-export OPENAI_API_KEY=your_key
-PYTHONPATH=. python scripts/record_real.py MODEL_NAME     # records 10 real runs
-python -m replaylens replay runs.jsonl --agent examples.refund_bot:run_agent \
-  --prompt examples/prompts/p2_fast.txt --rules examples/rules.json
-```
-
-Tested on Groq (`openai/gpt-oss-120b`): the "skip the lookup" prompt was flagged as a regression in 6 of 10 real runs. See `docs/real-run-report.html`. Never commit your `.env` file.
-
-## Benchmark several models on the same runs
-
-```bash
-python -m replaylens benchmark runs.jsonl --agent examples.refund_bot:run_agent \
-  --prompt examples/prompts/p1_baseline.txt --models good-model,cheap-model --mock
-```
-
-Prints a table (regressions, cost, latency per model) and writes `benchmark.md`.
-
-## Use in CI
-
-GitHub Action (one step, fails the pull request on regression):
-
-```yaml
-- uses: actions/checkout@v4
-- uses: k-kj0/replaylens@v0.1.0
-  with:
-    runs: runs.jsonl
-    agent: examples.refund_bot:run_agent
-    prompt: examples/prompts/p1_baseline.txt
-    rules: examples/rules.json
-    mock: "true"
-```
-
-- GitHub workflow example: `.github/workflows/replay.yml`
-- GitLab: `.gitlab-ci.yml`
-- `--fail-on-regression` makes the pull request or merge request fail when the agent regresses.
-
-## Rules (compliance checks)
-
-A rules file lists phrases the agent must never say (or must say). A new violation counts as a regression.
-
-```json
-{
-  "must_not_contain": ["approved", "you are covered", "guarantee"],
-  "must_contain_any": []
-}
-```
-
-Examples: `examples/rules.json` (refund bot) and `examples/insurance_claims/rules.json`.
-
-## Project layout
-
-```
-replaylens/            the library (recorder, replayer, gate, delta, compare, report, judge, noise, otel...)
-examples/              runnable demo agents, prompts and rules
-  refund_bot.py        single-turn demo
-  insurance_claims/    multi-turn demo
-scripts/               helper scripts (record_real.py)
-docs/                  reports and case studies
-tests/                 test suite
-action.yml             GitHub Action
-.gitlab-ci.yml         GitLab CI template
-```
-
-## Honest limits (v0.1)
-
-- **Multi-turn is turn-by-turn.** Each turn is replayed with the *recorded* history, so ReplayLens tests what your new prompt does next in the same situation. It does not re-simulate a whole conversation where the agent's new replies change what the customer would have said.
-- The agent must follow the `record` format shown above (`output`, `tool_calls`, token counts).
-- `replaylens.gate` checks tool calls, rule phrases, p95 latency and cost. Latency from mock agents is near zero, so use real-model runs for latency limits.
-- Text only. For voice agents, replay the transcripts.
-- Latency numbers from free-tier APIs are noisy.
-- The insurance example uses a scripted agent, so its numbers show how the tool behaves, not how a particular real model behaves.
-- Similar projects exist (langgraph-replay, replayd, ProxyTrace). ReplayLens aims to be the zero-setup, any-endpoint tool with tool-call diffs and compliance rules.
+1. Open an issue describing the proposed change or problem.
+2. Keep changes focused and testable.
+3. Run the relevant checks before submitting a pull request.
 
 ## License
 
-MIT
+A license has not been specified here. Add a `LICENSE` file and update this section once you choose a license for the project.
+
+---
+
+**ReplayLens** — making AI agent evaluation results easier to inspect and compare.
