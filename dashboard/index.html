@@ -1,508 +1,389 @@
+
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description"
-    content="ReplayLens regression report summary for comparing AI agent runs.">
-  <title>ReplayLens — Regression Report</title>
-
-  <style>
-    :root {
-      color-scheme: light;
-      --ink: #172033;
-      --muted: #68738a;
-      --line: #e4e9f2;
-      --surface: #ffffff;
-      --canvas: #f6f8fc;
-      --blue: #4659db;
-      --green: #147d55;
-      --green-bg: #e8f7ef;
-      --amber: #79531b;
-      --amber-bg: #fff9eb;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      background: var(--canvas);
-      color: var(--ink);
-      font: 14px/1.6 Inter, system-ui, -apple-system, sans-serif;
-    }
-
-    button { font: inherit; cursor: pointer; }
-
-    .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--line);
-    }
-
-    .topbar-inner {
-      max-width: 1100px;
-      margin: auto;
-      padding: 18px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .brand {
-      font-size: 21px;
-      font-weight: 850;
-      letter-spacing: -0.7px;
-    }
-
-    .brand span { color: var(--blue); }
-
-    .top-note {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    main {
-      max-width: 1100px;
-      margin: auto;
-      padding: 36px 24px 56px;
-    }
-
-    .eyebrow {
-      color: var(--blue);
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 1.4px;
-      text-transform: uppercase;
-    }
-
-    .heading-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      flex-wrap: wrap;
-      gap: 18px;
-    }
-
-    h1 {
-      font-size: clamp(29px, 4vw, 38px);
-      line-height: 1.2;
-      letter-spacing: -1.3px;
-      margin: 7px 0;
-    }
-
-    h2 {
-      font-size: 17px;
-      letter-spacing: -0.3px;
-      margin: 0;
-    }
-
-    h3 {
-      font-size: 13px;
-      margin: 0 0 8px;
-    }
-
-    p { margin-top: 0; }
-
-    .muted { color: var(--muted); }
-
-    .subtitle {
-      margin-bottom: 0;
-      color: var(--muted);
-    }
-
-    .verdict {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 13px;
-      border-radius: 30px;
-      background: var(--green-bg);
-      color: var(--green);
-      font-weight: 800;
-      font-size: 12px;
-      white-space: nowrap;
-    }
-
-    .verdict-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-
-    .notice {
-      margin: 24px 0;
-      padding: 13px 15px;
-      border: 1px solid #f0d8a8;
-      border-radius: 10px;
-      background: var(--amber-bg);
-      color: var(--amber);
-      font-size: 12px;
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-      margin: 24px 0;
-    }
-
-    .stat, .panel {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 13px;
-      box-shadow: 0 2px 8px #17203305;
-    }
-
-    .stat { padding: 20px; }
-
-    .stat-label {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .stat-value {
-      font-size: 30px;
-      font-weight: 800;
-      letter-spacing: -1px;
-      margin-top: 6px;
-      line-height: 1.3;
-    }
-
-    .stat-foot {
-      margin-top: 5px;
-      color: var(--muted);
-      font-size: 11px;
-    }
-
-    .panel { margin-top: 18px; overflow: hidden; }
-
-    .panel-head {
-      padding: 20px 22px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .panel-head p {
-      margin: 5px 0 0;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .panel-body { padding: 22px; }
-
-    .comparison {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      gap: 15px;
-    }
-
-    .model {
-      min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 16px;
-      background: #fbfcff;
-    }
-
-    .model-label {
-      display: block;
-      color: var(--muted);
-      font-size: 11px;
-      margin-bottom: 7px;
-    }
-
-    .model-name {
-      font-size: 14px;
-      font-weight: 750;
-      overflow-wrap: anywhere;
-    }
-
-    .arrow {
-      font-size: 22px;
-      color: var(--blue);
-    }
-
-    .breakdown {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .breakdown-item {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 15px;
-    }
-
-    .breakdown-number {
-      font-size: 23px;
-      font-weight: 800;
-    }
-
-    .breakdown-label {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .empty {
-      text-align: center;
-      padding: 28px 16px;
-      background: #fbfcff;
-      border: 1px dashed #cbd3e3;
-      border-radius: 10px;
-    }
-
-    .empty h3 { font-size: 14px; }
-
-    .empty p {
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 0;
-    }
-
-    .button {
-      background: white;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 9px 13px;
-      color: var(--ink);
-      font-weight: 700;
-    }
-
-    .button.primary {
-      background: var(--blue);
-      color: white;
-      border-color: var(--blue);
-    }
-
-    button:focus-visible {
-      outline: 3px solid #aab4ff;
-      outline-offset: 3px;
-    }
-
-    footer {
-      text-align: center;
-      color: var(--muted);
-      font-size: 11px;
-      padding: 28px 12px 0;
-    }
-
-    @media (max-width: 700px) {
-      main { padding: 26px 15px 40px; }
-      .topbar-inner { padding: 15px; }
-      .top-note { display: none; }
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-      .stat { padding: 15px; }
-      .stat-value { font-size: 25px; }
-      .comparison { grid-template-columns: 1fr; }
-      .arrow { text-align: center; transform: rotate(90deg); }
-      .breakdown { grid-template-columns: 1fr; }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Inspect ReplayLens AI-agent regression reports, filter run outcomes, and export summaries.">
+<title>ReplayLens — Report Explorer</title>
+<style>
+:root{color-scheme:light;--ink:#172033;--muted:#68738a;--line:#e2e8f0;--surface:#fff;--canvas:#f5f7fb;--blue:#4659db;--green:#147d55;--green-bg:#e8f7ef;--red:#a52c36;--red-bg:#fff0f0;--amber:#79531b;--amber-bg:#fff8e8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.55 Inter,system-ui,-apple-system,sans-serif}
+button,input,select{font:inherit}
+button{cursor:pointer}
+.topbar{background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar-inner,main{max-width:1120px;margin:auto}
+.topbar-inner{padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{font-size:21px;font-weight:850;letter-spacing:-.7px}
+.brand span{color:var(--blue)}
+.topnote{color:var(--muted);font-size:12px}
+main{padding:32px 22px 48px}
+.heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap}
+.eyebrow{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase}
+h1{font-size:clamp(28px,4vw,38px);line-height:1.2;letter-spacing:-1px;margin:6px 0}
+h2{font-size:17px;margin:0}
+h3{font-size:14px;margin:0 0 8px}
+.muted,.subtitle{color:var(--muted)}
+.subtitle{margin:0}
+.verdict{display:inline-flex;align-items:center;gap:8px;padding:8px 13px;border-radius:30px;font-weight:800;font-size:12px}
+.verdict.safe{background:var(--green-bg);color:var(--green)}
+.verdict.unsafe{background:var(--red-bg);color:var(--red)}
+.verdict-dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.notice{margin:22px 0;padding:13px 15px;border:1px solid #f0d8a8;border-radius:10px;background:var(--amber-bg);color:var(--amber);font-size:12px}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:18px 0}
+.button{display:inline-flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 13px;color:var(--ink);font-weight:700;text-decoration:none}
+.button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #aab4ff;outline-offset:2px}
+.file-label{display:inline-flex}
+.file-label input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+#fileName{font-size:12px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0}
+.stat,.panel{background:var(--surface);border:1px solid var(--line);border-radius:13px;box-shadow:0 2px 8px #17203305}
+.stat{padding:17px}
+.stat-label{color:var(--muted);font-size:12px}
+.stat-value{font-size:28px;font-weight:820;letter-spacing:-.8px;margin-top:4px;overflow-wrap:anywhere}
+.stat-foot{font-size:11px;color:var(--muted);margin-top:3px}
+.panel{margin-top:16px;overflow:hidden}
+.panel-head{padding:18px 20px;border-bottom:1px solid var(--line)}
+.panel-head p{margin:4px 0 0;color:var(--muted);font-size:12px}
+.panel-body{padding:20px}
+.comparison{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px}
+.model{min-width:0;border:1px solid var(--line);border-radius:10px;padding:14px;background:#fbfcff}
+.model-label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}
+.model-name{font-weight:750;overflow-wrap:anywhere}
+.arrow{font-size:22px;color:var(--blue)}
+.filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.filters input,.filters select{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink)}
+.filters input{flex:1;min-width:180px}
+.run-list{display:grid;gap:12px}
+.run{border:1px solid var(--line);border-radius:10px;padding:15px}
+.run-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.run-input{font-weight:750;overflow-wrap:anywhere}
+.tag{display:inline-block;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:800;text-transform:capitalize;white-space:nowrap}
+.tag.regression{background:var(--red-bg);color:var(--red)}
+.tag.improved{background:var(--green-bg);color:var(--green)}
+.tag.changed{background:var(--amber-bg);color:var(--amber)}
+.tag.same{background:#eef1f6;color:#475569}
+.reason{margin:10px 0;color:var(--red);font-size:12px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.cols section{min-width:0}
+.cols h3{font-size:11px;letter-spacing:.6px;color:var(--muted)}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;background:#f6f7fb;border:1px solid #edf0f5;padding:10px;border-radius:7px;margin:5px 0;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+.empty{text-align:center;padding:26px 12px;color:var(--muted)}
+.statusline{font-size:12px;color:var(--muted);margin-left:auto}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:28px 12px 0}
+@media(max-width:760px){
+ main{padding:24px 14px 36px}
+ .topbar-inner{padding:14px}
+ .topnote{display:none}
+ .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ .stat{padding:13px}
+ .stat-value{font-size:24px}
+ .comparison{grid-template-columns:1fr}
+ .arrow{text-align:center;transform:rotate(90deg)}
+ .cols{grid-template-columns:1fr}
+ .run-top{flex-direction:column}
+}
+</style>
 </head>
-
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">Replay<span>Lens</span></div>
-      <div class="top-note">AI agent quality · Regression reports</div>
-      <button class="button" id="exportButton">Export JSON ↓</button>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">Replay<span>Lens</span></div>
+    <div class="topnote">AI agent quality · Report explorer</div>
+    <button class="button" id="exportButton" type="button">Export summary JSON ↓</button>
+  </div>
+</header>
+
+<main>
+  <section class="heading">
+    <div>
+      <div class="eyebrow">Quality overview</div>
+      <h1>Regression report</h1>
+      <p class="subtitle">Inspect run outcomes and compare agent versions.</p>
     </div>
-  </header>
-
-  <main>
-    <section class="heading-row">
-      <div>
-        <div class="eyebrow">Quality overview</div>
-        <h1>Regression report</h1>
-        <p class="subtitle">
-          Compare agent versions and review the reported regression outcome.
-        </p>
-      </div>
-
-      <div class="verdict">
-        <span class="verdict-dot"></span>
-        SAFE TO SHIP
-      </div>
-    </section>
-
-    <div class="notice">
-      <strong>Report snapshot:</strong>
-      This page displays the results from one report. It is not live
-      monitoring and does not automatically fetch future reports.
+    <div id="verdict" class="verdict safe" role="status">
+      <span class="verdict-dot"></span>
+      <span id="verdictText">SAFE TO SHIP</span>
     </div>
+  </section>
 
-    <section class="stats" aria-label="Report metrics">
-      <article class="stat">
-        <div class="stat-label">Total runs</div>
-        <div class="stat-value">30</div>
-        <div class="stat-foot">Runs in this report</div>
-      </article>
+  <div class="notice" id="notice">
+    <strong>Sample snapshot:</strong> These are the report values bundled with this page.
+    Load a generated ReplayLens JSON report to inspect your own results.
+    A safe verdict applies only to the supplied evaluation and rules.
+  </div>
 
-      <article class="stat">
-        <div class="stat-label">Regressions</div>
-        <div class="stat-value">0</div>
-        <div class="stat-foot">Reported regressions</div>
-      </article>
+  <div class="toolbar">
+    <label class="button primary file-label" for="reportFile">
+      Load report JSON
+      <input id="reportFile" type="file" accept=".json,application/json">
+    </label>
+    <button class="button" id="resetButton" type="button">Restore sample</button>
+    <span id="fileName">Sample report loaded</span>
+    <span id="statusLine" class="statusline" role="status" aria-live="polite"></span>
+  </div>
 
-      <article class="stat">
-        <div class="stat-label">Same</div>
-        <div class="stat-value">30</div>
-        <div class="stat-foot">Reported unchanged runs</div>
-      </article>
+  <section class="stats" id="stats" aria-label="Report metrics"></section>
 
-      <article class="stat">
-        <div class="stat-label">Improved</div>
-        <div class="stat-value">0</div>
-        <div class="stat-foot">Reported improvements</div>
-      </article>
-
-      <article class="stat">
-        <div class="stat-label">Changed</div>
-        <div class="stat-value">0</div>
-        <div class="stat-foot">Other reported changes</div>
-      </article>
-
-      <article class="stat">
-        <div class="stat-label">Cost change</div>
-        <div class="stat-value">−0.2%</div>
-        <div class="stat-foot">As reported</div>
-      </article>
-    </section>
-
-    <section class="panel" aria-labelledby="comparisonHeading">
-      <div class="panel-head">
-        <h2 id="comparisonHeading">Version comparison</h2>
-        <p>The old and new prompt files named in your report.</p>
-      </div>
-
-      <div class="panel-body">
-        <div class="comparison">
-          <div class="model">
-            <span class="model-label">Previous</span>
-            <div class="model-name">good-model / v1.txt</div>
-          </div>
-
-          <div class="arrow" aria-label="compared with">→</div>
-
-          <div class="model">
-            <span class="model-label">New</span>
-            <div class="model-name">good-model / v3_polite.txt</div>
-          </div>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Version comparison</h2>
+      <p>Previous and current versions named in the report.</p>
+    </div>
+    <div class="panel-body">
+      <div class="comparison">
+        <div class="model">
+          <span class="model-label">Previous</span>
+          <div class="model-name" id="oldLabel">good-model / v1.txt</div>
+        </div>
+        <div class="arrow" aria-label="compared with">→</div>
+        <div class="model">
+          <span class="model-label">Current</span>
+          <div class="model-name" id="newLabel">good-model / v3_polite.txt</div>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section class="panel" aria-labelledby="changesHeading">
-      <div class="panel-head">
-        <h2 id="changesHeading">Run breakdown</h2>
-        <p>Summary counts from the supplied report.</p>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Individual run details</h2>
+      <p>Filter by outcome or search the input, outputs, and regression reasons.</p>
+    </div>
+    <div class="panel-body">
+      <div class="filters">
+        <label for="statusFilter">Outcome</label>
+        <select id="statusFilter">
+          <option value="all">All outcomes</option>
+          <option value="regression">Regressions</option>
+          <option value="improved">Improved</option>
+          <option value="changed">Changed</option>
+          <option value="same">Same</option>
+        </select>
+        <input id="searchInput" type="search" placeholder="Search runs…" aria-label="Search run details">
+        <span id="runCount" class="muted"></span>
       </div>
+      <div id="runs" class="run-list" style="margin-top:14px"></div>
+    </div>
+  </section>
 
-      <div class="panel-body">
-        <div class="breakdown">
-          <div class="breakdown-item">
-            <div class="breakdown-number">30</div>
-            <div class="breakdown-label">Same</div>
-          </div>
-          <div class="breakdown-item">
-            <div class="breakdown-number">0</div>
-            <div class="breakdown-label">Improved</div>
-          </div>
-          <div class="breakdown-item">
-            <div class="breakdown-number">0</div>
-            <div class="breakdown-label">Changed</div>
-          </div>
+  <footer>ReplayLens · Report explorer · Reports are processed locally in your browser</footer>
+</main>
+
+<script>
+"use strict";
+
+const sample = {
+  old_label: "good-model / v1.txt",
+  new_label: "good-model / v3_polite.txt",
+  summary: {
+    total_runs: 30,
+    same: 30,
+    improved: 0,
+    changed: 0,
+    regressions: 0,
+    cost_change_pct: -0.2,
+    latency_change_pct: -0.2,
+    safe_to_ship: true
+  },
+  results: []
+};
+
+let report = sample;
+const $ = id => document.getElementById(id);
+
+const text = value =>
+  value === null || value === undefined || value === "" ? "—" : String(value);
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[c]));
+}
+
+function normalise(input) {
+  if (!input || typeof input !== "object" ||
+      !input.summary || !Array.isArray(input.results)) {
+    throw new Error("Expected a ReplayLens report with summary and results fields.");
+  }
+
+  const summary = input.summary;
+  for (const key of ["total_runs", "same", "improved", "changed", "regressions"]) {
+    if (!Number.isFinite(Number(summary[key]))) {
+      throw new Error("Report summary is missing a valid " + key + " value.");
+    }
+  }
+
+  for (const [index, result] of input.results.entries()) {
+    if (!result || typeof result !== "object" ||
+        !["regression", "improved", "changed", "same"].includes(result.status)) {
+      throw new Error("Run " + (index + 1) + " has an unsupported or missing status.");
+    }
+    if (!result.old || !result.new) {
+      throw new Error("Run " + (index + 1) + " is missing old/new run data.");
+    }
+  }
+
+  return input;
+}
+
+function stat(label, value, foot) {
+  return `<article class="stat">
+    <div class="stat-label">${escapeHTML(label)}</div>
+    <div class="stat-value">${escapeHTML(value)}</div>
+    <div class="stat-foot">${escapeHTML(foot)}</div>
+  </article>`;
+}
+
+function render() {
+  const summary = report.summary || {};
+  const safe = Boolean(summary.safe_to_ship);
+
+  $("verdict").className = "verdict " + (safe ? "safe" : "unsafe");
+  $("verdictText").textContent = safe
+    ? "SAFE TO SHIP"
+    : "NOT SAFE — REVIEW REGRESSIONS";
+
+  $("oldLabel").textContent = text(report.old_label);
+  $("newLabel").textContent = text(report.new_label);
+
+  $("stats").innerHTML = [
+    stat("Total runs", text(summary.total_runs), "Runs in this report"),
+    stat("Regressions", text(summary.regressions), "Reported regressions"),
+    stat("Same", text(summary.same), "Unchanged outcomes"),
+    stat("Improved", text(summary.improved), "Improved outcomes"),
+    stat("Changed", text(summary.changed), "Other changes"),
+    stat("Cost change", text(summary.cost_change_pct) + "%", "Reported relative change"),
+    stat("Latency change", text(summary.latency_change_pct) + "%", "Reported relative change"),
+    stat(
+      "Average latency",
+      Number.isFinite(Number(summary.new_avg_latency_ms))
+        ? Number(summary.new_avg_latency_ms).toLocaleString() + " ms"
+        : "—",
+      "Current run average, if supplied"
+    )
+  ].join("");
+
+  const filter = $("statusFilter").value;
+  const query = $("searchInput").value.trim().toLowerCase();
+
+  const rows = report.results.filter(result => {
+    const searchable = [
+      result.input,
+      ...(result.reasons || []),
+      result.old.output,
+      result.new.output,
+      result.old.error,
+      result.new.error
+    ].join(" ").toLowerCase();
+
+    return (filter === "all" || result.status === filter) &&
+      (!query || searchable.includes(query));
+  });
+
+  $("runCount").textContent = `${rows.length} of ${report.results.length} runs`;
+
+  $("runs").innerHTML = rows.length
+    ? rows.map((result, index) => `
+      <article class="run">
+        <div class="run-top">
+          <div class="run-input">${escapeHTML(result.input || `Run ${index + 1}`)}</div>
+          <span class="tag ${escapeHTML(result.status)}">${escapeHTML(result.status)}</span>
         </div>
-      </div>
-    </section>
-
-    <section class="panel" aria-labelledby="detailsHeading">
-      <div class="panel-head">
-        <h2 id="detailsHeading">Individual run details</h2>
-        <p>This report view did not provide individual entries to display.</p>
-      </div>
-
-      <div class="panel-body">
-        <div class="empty">
-          <h3>Nothing in this view</h3>
-          <p>
-            The report summary is available, but individual run records
-            are not included in the supplied view. No example records
-            have been added.
-          </p>
+        ${(result.reasons || []).length
+          ? `<div class="reason">${result.reasons.map(escapeHTML).join("<br>")}</div>`
+          : ""}
+        <div class="cols">
+          <section>
+            <h3>PREVIOUS OUTPUT</h3>
+            <pre>${escapeHTML(result.old.output)}</pre>
+            <h3>PREVIOUS TOOL CALLS</h3>
+            <pre>${escapeHTML(JSON.stringify(result.old.tool_calls || [], null, 2))}</pre>
+          </section>
+          <section>
+            <h3>CURRENT OUTPUT</h3>
+            <pre>${escapeHTML(result.new.output)}</pre>
+            <h3>CURRENT TOOL CALLS</h3>
+            <pre>${escapeHTML(JSON.stringify(result.new.tool_calls || [], null, 2))}</pre>
+          </section>
         </div>
-      </div>
-    </section>
+      </article>
+    `).join("")
+    : `<div class="empty">${
+        report.results.length
+          ? "No runs match these filters."
+          : "This report contains summary metrics but no individual run records. Generate a report with run details to inspect individual outcomes."
+      }</div>`;
+}
 
-    <section class="panel" aria-labelledby="performanceHeading">
-      <div class="panel-head">
-        <h2 id="performanceHeading">Performance changes</h2>
-        <p>Relative changes reported by ReplayLens.</p>
-      </div>
+$("reportFile").addEventListener("change", async event => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
 
-      <div class="panel-body">
-        <div class="breakdown">
-          <div class="breakdown-item">
-            <div class="breakdown-label">Cost change</div>
-            <div class="breakdown-number">−0.2%</div>
-            <div class="breakdown-label">As reported</div>
-          </div>
+  try {
+    const parsed = normalise(JSON.parse(await file.text()));
+    report = parsed;
+    $("fileName").textContent = file.name;
+    $("notice").innerHTML =
+      "<strong>Loaded report:</strong> " + escapeHTML(file.name) +
+      ". Values below come from this file; they are not independently verified by the dashboard.";
+    $("statusLine").textContent = "Report loaded";
+    render();
+  } catch (error) {
+    $("statusLine").textContent = "Could not load report";
+    alert("Could not load this report JSON: " + error.message);
+  }
 
-          <div class="breakdown-item">
-            <div class="breakdown-label">Latency change</div>
-            <div class="breakdown-number">−0.2%</div>
-            <div class="breakdown-label">As reported</div>
-          </div>
+  event.target.value = "";
+});
 
-          <div class="breakdown-item">
-            <div class="breakdown-label">Regression status</div>
-            <div class="breakdown-number">0</div>
-            <div class="breakdown-label">Reported regressions</div>
-          </div>
-        </div>
-      </div>
-    </section>
+$("resetButton").addEventListener("click", () => {
+  report = sample;
+  $("fileName").textContent = "Sample report loaded";
+  $("notice").innerHTML =
+    "<strong>Sample snapshot:</strong> These are the report values bundled with this page. " +
+    "Load a generated ReplayLens JSON report to inspect your own results. " +
+    "A safe verdict applies only to the supplied evaluation and rules.";
+  $("statusLine").textContent = "Sample restored";
+  $("statusFilter").value = "all";
+  $("searchInput").value = "";
+  render();
+});
 
-    <footer>
-      ReplayLens · Open-source project · Static report snapshot
-    </footer>
-  </main>
+$("statusFilter").addEventListener("change", render);
+$("searchInput").addEventListener("input", render);
 
-  <script>
-    const report = {
-      title: "ReplayLens report",
-      previous: "good-model / v1.txt",
-      current: "good-model / v3_polite.txt",
-      verdict: "SAFE TO SHIP",
-      runs: 30,
-      same: 30,
-      improved: 0,
-      changed: 0,
-      regressions: 0,
-      cost_change_percent: -0.2,
-      latency_change_percent: -0.2,
-      data_type: "static report snapshot",
-      individual_run_details: null
-    };
+$("exportButton").addEventListener("click", () => {
+  const data = {
+    old_label: report.old_label,
+    new_label: report.new_label,
+    summary: report.summary,
+    result_count: report.results.length,
+    results_included: report.results.length > 0
+  };
 
-    document.getElementById("exportButton").addEventListener("click", () => {
-      const data = JSON.stringify(report, null, 2);
-      const blob = new Blob([data], {
-        type: "application/json"
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
 
-      link.href = url;
-      link.download = "replaylens-report-summary.json";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+  link.href = url;
+  link.download = "replaylens-report-summary.json";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 
-      URL.revokeObjectURL(url);
-    });
-  </script>
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+render();
+</script>
 </body>
 </html>
