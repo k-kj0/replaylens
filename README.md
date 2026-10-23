@@ -1,172 +1,118 @@
+
 # ReplayLens
 
-**AI agent quality and regression testing — compare runs, track changes, and review release readiness.**
+**AI-agent quality and regression testing — compare runs, track changes, and review release readiness.**
 
-ReplayLens helps developers evaluate changes between versions of an AI agent or prompt by summarizing reported test outcomes, regressions, cost changes, and latency changes.
+ReplayLens records agent runs, replays them against a changed prompt or model, and compares outputs, tool calls, rule violations, cost, and latency.
 
-The project includes automated Python checks and a lightweight dashboard for reviewing a report.
+- **Dashboard:** https://k-kj0.github.io/replaylens/
+- **Source:** https://github.com/k-kj0/replaylens
+- **License:** MIT
 
-**[View the Dashboard](https://k-kj0.github.io/replaylens/)** · **[View the Source Code](https://github.com/k-kj0/replaylens)**
+## What it does
 
----
+- Records agent runs and relevant metadata.
+- Compares previous and replayed runs.
+- Flags changes to tool names or arguments, newly violated rules, and run errors.
+- Summarizes reported regression counts, cost changes, and latency changes.
+- Produces a standalone HTML report and supports a CI regression gate.
+- Lets you load a generated JSON report into the static dashboard, filter individual runs by outcome, search run content, and export a summary.
 
-## Overview
+## Dashboard
 
-AI agent behavior can change when prompts, models, or application logic are updated. A change may improve one outcome while introducing a regression elsewhere.
+The published dashboard is a static, client-side report explorer. It does not run an agent or automatically fetch new reports.
 
-ReplayLens is a small project focused on making those changes easier to review.
+1. Open the [ReplayLens dashboard](https://k-kj0.github.io/replaylens/).
+2. Select **Load report JSON**.
+3. Choose a ReplayLens JSON report containing `summary` and `results` fields.
+4. Filter runs by outcome or search the input, output, and regression reasons.
+5. Use **Export summary JSON** to download a compact summary.
 
-It presents report information such as:
+The selected file is processed locally in your browser; it is not uploaded to a ReplayLens server by the dashboard.
 
-- Total runs included in a report
-- Reported regressions, unchanged runs, improvements, and other changes
-- Previous and new prompt or version identifiers
-- Reported cost and latency changes
-- A JSON export of the displayed report summary
+The bundled sample is illustrative report data, not a guarantee of agent safety. A `SAFE TO SHIP` result means only that the supplied report's configured regression threshold was met.
 
-## Dashboard Preview
+## Quickstart
 
-The dashboard displays a report snapshot with a high-level quality summary, a version comparison, performance changes, and a run breakdown.
-
-It also explains when individual run records are unavailable rather than displaying fabricated examples.
-
-**Important:** The published dashboard currently displays a static report snapshot. It does not automatically collect new runs, connect to a live AI agent, or update itself when a new report is generated.
-
-## Example Report
-
-The current dashboard snapshot contains the following reported results:
-
-| Metric | Reported result |
-|---|---:|
-| Total runs | 30 |
-| Regressions | 0 |
-| Same | 30 |
-| Improved | 0 |
-| Changed | 0 |
-| Cost change | −0.2% |
-| Latency change | −0.2% |
-| Reported outcome | SAFE TO SHIP |
-
-**Compared versions**
-
-- Previous: `good-model / v1.txt`
-- New: `good-model / v3_polite.txt`
-
-These values describe the supplied report snapshot, not a guarantee that every possible agent interaction is safe or correct.
-
-## Features
-
-### Report summary
-Review the overall results without having to interpret every metric separately.
-
-### Version comparison
-See which previous and new prompt or version identifiers were compared.
-
-### Regression visibility
-Review the regression count and other reported outcome categories.
-
-### Performance metrics
-See reported changes in cost and latency.
-
-### JSON export
-Export the summary displayed on the dashboard for further inspection or use in another tool.
-
-### Automated checks
-Use GitHub Actions to run the project's Python checks and deploy the static dashboard.
-
-## Project Structure
-
-```text
-replaylens/
-├── .github/
-│   └── workflows/
-│       ├── replay.yml
-│       └── static.yml
-├── dashboard/
-│   └── index.html
-├── tests/
-├── README.md
-└── pyproject.toml
-```
-
-The `tests/` directory and `pyproject.toml` are shown as the expected locations for tests and Python project configuration. Check the repository before relying on these paths; adjust this tree if your actual files differ.
-
-## Getting Started
-
-### View the dashboard
-
-Open the published dashboard:
-
-https://k-kj0.github.io/replaylens/
-
-### Get the source code
-
-Clone the repository:
+With Python installed:
 
 ```bash
 git clone https://github.com/k-kj0/replaylens.git
 cd replaylens
+python -m venv .venv
 ```
 
-### Run the Python checks
-
-This project uses Python checks in GitHub Actions. The exact local commands depend on the dependencies and test configuration in the repository.
-
-If the project uses `pytest` and the required dependencies are installed, run:
+Activate the environment:
 
 ```bash
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+```
+
+Install the project and run the example:
+
+```bash
+python -m pip install -e .
+python -m examples.refund_bot
+python -m replaylens --help
+```
+
+Follow the CLI help and the example instructions to record runs and replay them against a different prompt.
+
+## Run the tests
+
+Install the test dependencies and run the suite:
+
+```bash
+python -m pip install -e ".[test]"
 python -m pytest
 ```
 
-If dependencies are declared in `pyproject.toml`, follow the installation instructions defined there before running the tests.
+Install the optional OpenAI integration only if you need it:
 
-## Continuous Integration and Deployment
+```bash
+python -m pip install -e ".[openai]"
+```
 
-ReplayLens uses GitHub Actions for two workflows:
+## Continuous integration
 
-- **Python checks:** runs the configured automated checks.
-- **Dashboard deployment:** publishes the static dashboard through GitHub Pages.
+ReplayLens includes a GitHub Action and a GitLab CI configuration for running replay checks as part of a development workflow.
 
-Both workflows have passed for the current dashboard update.
+Configure a replay job with your run data, agent entry point, prompt, and optional rules. Enable the regression gate when you want a regression to fail the CI job.
 
-Workflow results are available in the [GitHub Actions tab](https://github.com/k-kj0/replaylens/actions).
+See [`action.yml`](action.yml) and [`.gitlab-ci.yml`](.gitlab-ci.yml) for the available configuration.
 
-## Current Limitations
+## Repository layout
 
-ReplayLens is under development. The current published dashboard is a report-viewing prototype rather than a complete, live regression-testing service.
+```text
+replaylens/
+├── .github/workflows/   # CI, replay, and static dashboard workflows
+├── dashboard/index.html # Static report explorer
+├── docs/                # Case studies and example reports
+├── examples/            # Example agents, prompts, and rules
+├── replaylens/          # Python package and CLI
+├── tests/               # Automated tests
+├── action.yml           # GitHub Action metadata
+├── pyproject.toml
+└── README.md
+```
 
-Currently:
+## Limitations
 
-- The dashboard displays one predefined report snapshot.
-- Individual run records are not included in the displayed report.
-- New test runs are not automatically collected by the dashboard.
-- The report summary does not independently verify model quality or production safety.
-- Automated checks validate only the behavior covered by the project's configured tests.
-
-## Potential Next Steps
-
-Possible future improvements include:
-
-- Loading reports from generated JSON files.
-- Displaying individual test-run details and before/after outputs.
-- Adding filters for regression outcomes.
-- Comparing multiple reports over time.
-- Integrating report generation into an automated evaluation workflow.
-
-These are potential improvements, not features currently claimed as implemented.
+- The hosted dashboard starts with a bundled sample snapshot; it does not automatically update when a new report is generated.
+- Individual runs appear only when the loaded report includes a `results` array with old/new run data.
+- A regression check cannot prove that an AI agent is universally safe or correct. Results depend on the test cases, rules, and comparison settings used.
+- The dashboard displays supplied report values; it does not independently validate model quality or reproduce the run.
 
 ## Contributing
 
-Contributions, bug reports, and suggestions are welcome.
-
-1. Open an issue describing the proposed change or problem.
-2. Keep changes focused and testable.
-3. Run the relevant checks before submitting a pull request.
+1. Open an issue describing the problem or proposed change.
+2. Keep pull requests focused and include tests where relevant.
+3. Run the relevant checks before opening a pull request.
 
 ## License
 
-A license has not been specified here. Add a `LICENSE` file and update this section once you choose a license for the project.
-
----
-
-**ReplayLens** — making AI agent evaluation results easier to inspect and compare.
+This project is licensed under the MIT License. See [`LICENSE`](LICENSE).
