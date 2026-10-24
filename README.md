@@ -1,40 +1,40 @@
-
 # ReplayLens
 
-**AI-agent quality and regression testing — compare runs, track changes, and review release readiness.**
+**Regression testing for AI agents.** Record agent runs, replay them against a changed prompt or model, and see exactly what changed: outputs, tool calls, rule violations, cost, and latency.
 
-ReplayLens records agent runs, replays them against a changed prompt or model, and compares outputs, tool calls, rule violations, cost, and latency.
-
-- **Dashboard:** https://k-kj0.github.io/replaylens/
-- **Source:** https://github.com/k-kj0/replaylens
+- **Live dashboard:** https://k-kj0.github.io/replaylens/
 - **License:** MIT
+
+## Why it exists
+
+Changing a prompt or swapping a model can quietly break an agent. ReplayLens gives you a repeatable before/after comparison so you can review release readiness the same way you review code.
 
 ## What it does
 
-- Records agent runs and relevant metadata.
-- Compares previous and replayed runs.
+- Records agent runs and the metadata needed to replay them.
+- Replays recorded runs against a changed prompt or model.
 - Flags changes to tool names or arguments, newly violated rules, and run errors.
-- Summarizes reported regression counts, cost changes, and latency changes.
-- Produces a standalone HTML report and supports a CI regression gate.
-- Lets you load a generated JSON report into the static dashboard, filter individual runs by outcome, search run content, and export a summary.
+- Summarizes regression counts, cost changes, and latency changes.
+- Produces a standalone HTML report and supports a CI regression gate that can fail a build.
+- Loads a generated JSON report into a static dashboard where you can filter runs by outcome, search run content, and export a summary.
 
 ## Dashboard
 
-The published dashboard is a static, client-side report explorer. It does not run an agent or automatically fetch new reports.
+The published dashboard is a static, client-side report explorer. It does not run an agent and does not fetch new reports automatically.
 
 1. Open the [ReplayLens dashboard](https://k-kj0.github.io/replaylens/).
 2. Select **Load report JSON**.
-3. Choose a ReplayLens JSON report containing `summary` and `results` fields.
-4. Filter runs by outcome or search the input, output, and regression reasons.
+3. Choose a ReplayLens JSON report that contains `summary` and `results` fields.
+4. Filter runs by outcome, or search inputs, outputs, and regression reasons.
 5. Use **Export summary JSON** to download a compact summary.
 
-The selected file is processed locally in your browser; it is not uploaded to a ReplayLens server by the dashboard.
+The file you select is processed locally in your browser. It is not uploaded to any server.
 
-The bundled sample is illustrative report data, not a guarantee of agent safety. A `SAFE TO SHIP` result means only that the supplied report's configured regression threshold was met.
+The bundled sample is illustrative data, not a guarantee of agent safety. A "SAFE TO SHIP" result only means the supplied report met its configured regression threshold.
 
 ## Quickstart
 
-With Python installed:
+Requires Python 3.
 
 ```bash
 git clone https://github.com/k-kj0/replaylens.git
@@ -60,18 +60,16 @@ python -m examples.refund_bot
 python -m replaylens --help
 ```
 
-Follow the CLI help and the example instructions to record runs and replay them against a different prompt.
+Use the CLI help and the examples in `examples/` to record runs and replay them against a different prompt.
 
 ## Run the tests
-
-Install the test dependencies and run the suite:
 
 ```bash
 python -m pip install -e ".[test]"
 python -m pytest
 ```
 
-Install the optional OpenAI integration only if you need it:
+Optional OpenAI integration:
 
 ```bash
 python -m pip install -e ".[openai]"
@@ -79,17 +77,13 @@ python -m pip install -e ".[openai]"
 
 ## Continuous integration
 
-ReplayLens includes a GitHub Action and a GitLab CI configuration for running replay checks as part of a development workflow.
-
-Configure a replay job with your run data, agent entry point, prompt, and optional rules. Enable the regression gate when you want a regression to fail the CI job.
-
-See [`action.yml`](action.yml) and [`.gitlab-ci.yml`](.gitlab-ci.yml) for the available configuration.
+ReplayLens includes a GitHub Action (`action.yml`) and a GitLab CI configuration (`.gitlab-ci.yml`) for running replay checks in a development workflow. Provide your run data, agent entry point, prompt, and optional rules, then enable the regression gate if you want a regression to fail the job.
 
 ## Repository layout
 
-```text
+```
 replaylens/
-├── .github/workflows/   # CI, replay, and static dashboard workflows
+├── .github/workflows/   # CI, replay, and dashboard workflows
 ├── dashboard/index.html # Static report explorer
 ├── docs/                # Case studies and example reports
 ├── examples/            # Example agents, prompts, and rules
@@ -102,10 +96,10 @@ replaylens/
 
 ## Limitations
 
-- The hosted dashboard starts with a bundled sample snapshot; it does not automatically update when a new report is generated.
-- Individual runs appear only when the loaded report includes a `results` array with old/new run data.
-- A regression check cannot prove that an AI agent is universally safe or correct. Results depend on the test cases, rules, and comparison settings used.
-- The dashboard displays supplied report values; it does not independently validate model quality or reproduce the run.
+- The hosted dashboard starts with a bundled sample snapshot and does not update when a new report is generated.
+- Individual runs appear only when the loaded report includes a `results` array with old and new run data.
+- A regression check cannot prove an agent is universally safe or correct. Results depend on your test cases, rules, and comparison settings.
+- The dashboard displays supplied report values. It does not validate model quality or reproduce the run.
 
 ## Contributing
 
@@ -115,4 +109,4 @@ replaylens/
 
 ## License
 
-This project is licensed under the MIT License. See [`LICENSE`](LICENSE).
+MIT. See [LICENSE](LICENSE).
