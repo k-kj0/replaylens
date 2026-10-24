@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -12,6 +11,7 @@
 body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.55 Inter,system-ui,-apple-system,sans-serif}
 button,input,select{font:inherit}
 button{cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
 .topbar{background:var(--surface);border-bottom:1px solid var(--line)}
 .topbar-inner,main{max-width:1120px;margin:auto}
 .topbar-inner{padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
@@ -56,6 +56,10 @@ h3{font-size:14px;margin:0 0 8px}
 .filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .filters input,.filters select{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink)}
 .filters input{flex:1;min-width:180px}
+.pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0 0;font-size:12px}
+.pager select{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.pager .button{padding:6px 11px}
+.perf{margin-left:auto;font:12px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;background:#eef1f6;padding:6px 10px;border-radius:8px;color:#334155}
 .run-list{display:grid;gap:12px}
 .run{border:1px solid var(--line);border-radius:10px;padding:15px}
 .run-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
@@ -84,6 +88,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:28px 12px 0}
  .arrow{text-align:center;transform:rotate(90deg)}
  .cols{grid-template-columns:1fr}
  .run-top{flex-direction:column}
+ .perf{margin-left:0}
 }
 </style>
 </head>
@@ -165,6 +170,19 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:28px 12px 0}
         <input id="searchInput" type="search" placeholder="Search runs…" aria-label="Search run details">
         <span id="runCount" class="muted"></span>
       </div>
+      <div class="pager">
+        <label for="pageSize">Rows per page</label>
+        <select id="pageSize">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="all">All rows (no paging)</option>
+        </select>
+        <button class="button" id="prevPage" type="button">← Prev</button>
+        <button class="button" id="nextPage" type="button">Next →</button>
+        <span id="pageInfo" class="muted"></span>
+        <span id="perf" class="perf" aria-live="polite"></span>
+      </div>
       <div id="runs" class="run-list" style="margin-top:14px"></div>
     </div>
   </section>
@@ -192,6 +210,7 @@ const sample = {
 };
 
 let report = sample;
+let page = 0;
 const $ = id => document.getElementById(id);
 
 const text = value =>
@@ -241,6 +260,33 @@ function stat(label, value, foot) {
   </article>`;
 }
 
+function renderRun(result, number) {
+  return `
+      <article class="run">
+        <div class="run-top">
+          <div class="run-input">${escapeHTML(result.input || `Run ${number}`)}</div>
+          <span class="tag ${escapeHTML(result.status)}">${escapeHTML(result.status)}</span>
+        </div>
+        ${(result.reasons || []).length
+          ? `<div class="reason">${result.reasons.map(escapeHTML).join("<br>")}</div>`
+          : ""}
+        <div class="cols">
+          <section>
+            <h3>PREVIOUS OUTPUT</h3>
+            <pre>${escapeHTML(result.old.output)}</pre>
+            <h3>PREVIOUS TOOL CALLS</h3>
+            <pre>${escapeHTML(JSON.stringify(result.old.tool_calls || [], null, 2))}</pre>
+          </section>
+          <section>
+            <h3>CURRENT OUTPUT</h3>
+            <pre>${escapeHTML(result.new.output)}</pre>
+            <h3>CURRENT TOOL CALLS</h3>
+            <pre>${escapeHTML(JSON.stringify(result.new.tool_calls || [], null, 2))}</pre>
+          </section>
+        </div>
+      </article>`;
+}
+
 function render() {
   const summary = report.summary || {};
   const safe = Boolean(summary.safe_to_ship);
@@ -287,39 +333,34 @@ function render() {
       (!query || searchable.includes(query));
   });
 
-  $("runCount").textContent = `${rows.length} of ${report.results.length} runs`;
+  // Paging: draw only one slice of rows unless "All rows" is selected.
+  const sizeValue = $("pageSize").value;
+  const size = sizeValue === "all" ? Math.max(rows.length, 1) : Number(sizeValue);
+  const pages = Math.max(1, Math.ceil(rows.length / size));
+  page = Math.min(Math.max(page, 0), pages - 1);
+  const start = page * size;
+  const shown = rows.slice(start, start + size);
 
-  $("runs").innerHTML = rows.length
-    ? rows.map((result, index) => `
-      <article class="run">
-        <div class="run-top">
-          <div class="run-input">${escapeHTML(result.input || `Run ${index + 1}`)}</div>
-          <span class="tag ${escapeHTML(result.status)}">${escapeHTML(result.status)}</span>
-        </div>
-        ${(result.reasons || []).length
-          ? `<div class="reason">${result.reasons.map(escapeHTML).join("<br>")}</div>`
-          : ""}
-        <div class="cols">
-          <section>
-            <h3>PREVIOUS OUTPUT</h3>
-            <pre>${escapeHTML(result.old.output)}</pre>
-            <h3>PREVIOUS TOOL CALLS</h3>
-            <pre>${escapeHTML(JSON.stringify(result.old.tool_calls || [], null, 2))}</pre>
-          </section>
-          <section>
-            <h3>CURRENT OUTPUT</h3>
-            <pre>${escapeHTML(result.new.output)}</pre>
-            <h3>CURRENT TOOL CALLS</h3>
-            <pre>${escapeHTML(JSON.stringify(result.new.tool_calls || [], null, 2))}</pre>
-          </section>
-        </div>
-      </article>
-    `).join("")
+  $("runCount").textContent = `${rows.length} of ${report.results.length} runs`;
+  $("pageInfo").textContent = rows.length ? `Page ${page + 1} of ${pages}` : "";
+  $("prevPage").disabled = page === 0;
+  $("nextPage").disabled = page >= pages - 1;
+
+  const t0 = performance.now();
+
+  $("runs").innerHTML = shown.length
+    ? shown.map((result, index) => renderRun(result, start + index + 1)).join("")
     : `<div class="empty">${
         report.results.length
           ? "No runs match these filters."
           : "This report contains summary metrics but no individual run records. Generate a report with run details to inspect individual outcomes."
       }</div>`;
+
+  void $("runs").offsetHeight; // force layout so the timing includes it
+  const ms = performance.now() - t0;
+  $("perf").textContent =
+    `Rows drawn: ${shown.length} · DOM nodes: ${document.getElementsByTagName("*").length}` +
+    ` · Render + layout: ${ms.toFixed(1)} ms`;
 }
 
 $("reportFile").addEventListener("change", async event => {
@@ -329,6 +370,7 @@ $("reportFile").addEventListener("change", async event => {
   try {
     const parsed = normalise(JSON.parse(await file.text()));
     report = parsed;
+    page = 0;
     $("fileName").textContent = file.name;
     $("notice").innerHTML =
       "<strong>Loaded report:</strong> " + escapeHTML(file.name) +
@@ -345,6 +387,7 @@ $("reportFile").addEventListener("change", async event => {
 
 $("resetButton").addEventListener("click", () => {
   report = sample;
+  page = 0;
   $("fileName").textContent = "Sample report loaded";
   $("notice").innerHTML =
     "<strong>Sample snapshot:</strong> These are the report values bundled with this page. " +
@@ -356,8 +399,11 @@ $("resetButton").addEventListener("click", () => {
   render();
 });
 
-$("statusFilter").addEventListener("change", render);
-$("searchInput").addEventListener("input", render);
+$("statusFilter").addEventListener("change", () => { page = 0; render(); });
+$("searchInput").addEventListener("input", () => { page = 0; render(); });
+$("pageSize").addEventListener("change", () => { page = 0; render(); });
+$("prevPage").addEventListener("click", () => { page -= 1; render(); });
+$("nextPage").addEventListener("click", () => { page += 1; render(); });
 
 $("exportButton").addEventListener("click", () => {
   const data = {
