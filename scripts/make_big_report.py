@@ -1,38 +1,70 @@
-"""Make a big ReplayLens report for performance testing.
+"""Make a large SYNTHETIC ReplayLens report for dashboard performance testing.
 
-Usage (run from the replaylens folder):
+Usage:
     python scripts/make_big_report.py 5000
 
-It finds an existing report (a .json file with "summary" and "results"),
-repeats its rows until there are N rows, and saves big_report.json.
+Writes big_report.json with N generated runs in the same shape the dashboard
+loads (summary + results). The rows are generated test data, not real agent
+runs. Describe it as a synthetic stress-test report on a resume.
 """
-import glob
 import json
+import random
 import sys
 
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
+random.seed(42)
 
-source = None
-for path in glob.glob("**/*.json", recursive=True):
-    if any(skip in path for skip in (".venv", "node_modules", ".git")):
-        continue
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        continue
-    if isinstance(data, dict) and "summary" in data and isinstance(data.get("results"), list) and data["results"]:
-        source = path
-        break
+TOPICS = ["refund policy", "order tracking", "password reset", "insurance claim",
+          "shipping delay", "invoice copy", "plan upgrade", "account closure"]
+STATUSES = ["same"] * 70 + ["improved"] * 10 + ["changed"] * 15 + ["regression"] * 5
 
-if source is None:
-    sys.exit("No report with 'summary' and 'results' found. Put one report .json in this folder and retry.")
 
-rows = data["results"]
-big = [json.loads(json.dumps(rows[i % len(rows)])) for i in range(n)]
-data["results"] = big
+def run(topic, tone):
+    return {
+        "output": f"Here is the {tone} answer about {topic}. " * random.randint(3, 8),
+        "tool_calls": [{"name": "lookup", "args": {"topic": topic, "id": random.randint(1000, 9999)}}],
+        "error": None,
+        "latency_ms": random.randint(300, 1800),
+        "cost_usd": round(random.uniform(0.0005, 0.004), 5),
+    }
+
+
+results = []
+for i in range(n):
+    topic = random.choice(TOPICS)
+    status = random.choice(STATUSES)
+    results.append({
+        "input": f"Customer question {i + 1}: help me with my {topic}",
+        "status": status,
+        "reasons": ["Required tool call missing in new run"] if status == "regression" else [],
+        "old": run(topic, "previous"),
+        "new": run(topic, "current"),
+    })
+
+count = {s: sum(1 for r in results if r["status"] == s) for s in ("same", "improved", "changed", "regression")}
+old_lat = sum(r["old"]["latency_ms"] for r in results) / n
+new_lat = sum(r["new"]["latency_ms"] for r in results) / n
+old_cost = sum(r["old"]["cost_usd"] for r in results)
+new_cost = sum(r["new"]["cost_usd"] for r in results)
+
+report = {
+    "old_label": "synthetic-model / v1.txt",
+    "new_label": "synthetic-model / v2.txt",
+    "summary": {
+        "total_runs": n,
+        "same": count["same"],
+        "improved": count["improved"],
+        "changed": count["changed"],
+        "regressions": count["regression"],
+        "cost_change_pct": round((new_cost - old_cost) / old_cost * 100, 1),
+        "latency_change_pct": round((new_lat - old_lat) / old_lat * 100, 1),
+        "new_avg_latency_ms": round(new_lat),
+        "safe_to_ship": count["regression"] == 0,
+    },
+    "results": results,
+}
 
 with open("big_report.json", "w", encoding="utf-8") as f:
-    json.dump(data, f)
+    json.dump(report, f)
 
-print(f"Used {source}: wrote big_report.json with {n} rows")
+print(f"Wrote big_report.json with {n} synthetic runs")
