@@ -93,6 +93,15 @@ replaylens/
 ├── pyproject.toml
 └── README.md
 ```
+## Voice agents (new)
+Voice agents break differently from text agents: the speech-to-text step hears words wrong, or the answer is right but arrives too slowly and the caller hears dead air. `replaylens.voice` compares two recordings of the same calls and reports per-stage latency (STT, LLM, TTS), transcript drift (word error rate), turns over a latency budget, and caller interruptions.
+
+```bash
+python -m replaylens.voice demo voice_demo          # sample calls, no API key or audio needed
+python -m replaylens.voice compare voice_demo/old.jsonl voice_demo/new.jsonl --md voice_report.md
+```
+
+It exits with code 1 when the new setup is not safe, so it can gate a pull request. The `voice-demo` workflow writes the report to the GitHub job summary. One JSON line per turn: `call_id`, `turn`, `user_transcript`, `agent_transcript`, `stt_ms`, `llm_ms`, `tts_ms`, and optionally `first_audio_ms` and `interrupted`.
 
 ## Limitations
 
