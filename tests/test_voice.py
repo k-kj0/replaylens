@@ -56,3 +56,13 @@ def test_demo_runs_and_regresses(tmp_path):
                        "--md", str(tmp_path / "r.md")])
     assert code == 1
     assert "NOT SAFE" in (tmp_path / "r.md").read_text()
+
+
+def test_voice_gate_fails_when_replies_become_unspeakable(tmp_path):
+    old = [_row("c1", i, said="Your refund is on its way.") for i in range(10)]
+    new = [_row("c1", i, said="**Refund started** - see https://x.com/r (3-5 days).") for i in range(10)]
+    result = voice.compare(old, new)
+    assert result["unspeakable_old"] == 0.0 and result["unspeakable_new"] == 1.0
+    fails = voice.evaluate(result)
+    assert any("text-to-speech" in f for f in fails)
+    assert voice.evaluate(voice.compare(old, old)) == []
