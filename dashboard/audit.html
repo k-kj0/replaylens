@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReplayLens audit tools</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--card:#f6f6f6;--bad:#8a1010;--badbg:#fde0e0;--ok:#0a5c25;--okbg:#d9f5e0;--warn:#6b5000;--warnbg:#fff2c9;--btn:#1a1a1a;--btnfg:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#141414;--fg:#eee;--mut:#aaa;--line:#333;--card:#1f1f1f;--bad:#ffb4b4;--badbg:#3a1616;--ok:#9fe3b3;--okbg:#10301b;--warn:#ffe08a;--warnbg:#3a2f0c;--btn:#eee;--btnfg:#141414}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:20px 0 8px}
+.sub{color:var(--mut);margin:0 0 16px}
+nav{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:7px 12px;border-radius:6px;cursor:pointer}
+button.on,button.go{background:var(--btn);color:var(--btnfg);border-color:var(--btn)}
+textarea,input{width:100%;font:13px/1.4 ui-monospace,Consolas,monospace;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px}
+textarea{height:150px;resize:vertical}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:700px){.grid{grid-template-columns:1fr}}
+label{display:block;font-weight:600;margin:10px 0 4px}
+.row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.cards{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;min-width:120px}
+.card b{display:block;font-size:22px}.card span{color:var(--mut);font-size:12px}
+.verdict{padding:10px 14px;border-radius:8px;font-weight:700;margin:12px 0}
+.verdict.ok{background:var(--okbg);color:var(--ok)}.verdict.bad{background:var(--badbg);color:var(--bad)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px}
+.tag.block{background:var(--badbg);color:var(--bad)}.tag.needs_human{background:var(--warnbg);color:var(--warn)}
+.err{color:var(--bad);margin-top:10px}
+section[hidden]{display:none}
+small{color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<h1>ReplayLens audit tools</h1>
+<p class="sub">Check recorded AI-agent runs against a policy, or compare two voice-agent recordings. Everything runs in your browser; nothing is uploaded. <a href="./">Back to the report explorer</a></p>
+<nav>
+  <button id="tabPolicy" class="on">Agent policy audit</button>
+  <button id="tabVoice">Voice regression check</button>
+</nav>
+
+<section id="policy">
+  <p>Phrase filters cannot catch an agent that says a refund was issued without calling the refund tool, or one that refunds $480 with nobody approving it. Paste recorded runs and a policy to see which past runs would have been blocked or sent to a human.</p>
+  <div class="grid">
+    <div><label for="runs">Runs (JSONL, one run per line: input, output, tool_calls)</label><textarea id="runs" spellcheck="false"></textarea></div>
+    <div><label for="rules">Policy (JSON)</label><textarea id="rules" spellcheck="false"></textarea></div>
+  </div>
+  <div class="row"><button class="go" id="runAudit">Audit</button><button id="demoPolicy">Load demo data</button></div>
+  <div id="policyOut"></div>
+</section>
+
+<section id="voice" hidden>
+  <p>A voice agent can answer correctly and still get worse: slower, mis-heard, or full of text a speech voice cannot read well. Paste two recordings of the same calls (JSONL, one turn per line) to see which stage regressed.</p>
+  <div class="grid">
+    <div><label for="oldv">Old recording</label><textarea id="oldv" spellcheck="false"></textarea></div>
+    <div><label for="newv">New recording</label><textarea id="newv" spellcheck="false"></textarea></div>
+  </div>
+  <div class="row"><label for="budget" style="margin:0">Reply budget (ms)</label><input id="budget" type="number" value="800" style="width:110px">
+    <button class="go" id="runVoice">Compare</button><button id="demoVoice">Load demo data</button></div>
+  <small>Each line: call_id, turn, user_transcript, agent_transcript, stt_ms, llm_ms, tts_ms, optional first_audio_ms and interrupted.</small>
+  <div id="voiceOut"></div>
+</section>
+</main>
+
+<script>
+// ==CORE START==
+const STAGES = ["stt_ms", "llm_ms", "tts_ms"];
+
+function parseJsonl(text) {
+  return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map((l, i) => {
+    try { return JSON.parse(l); } catch (e) { throw new Error("Line " + (i + 1) + " is not valid JSON"); }
+  });
+}
+function percentile(v, p) {
+  if (!v.length) return 0;
+  const s = [...v].sort((a, b) => a - b);
+  return s[Math.max(1, Math.ceil(p / 100 * s.length)) - 1];
+}
+function words(t) { return (t || "").toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter(Boolean); }
+function wer(ref, hyp) {
+  const r = words(ref), h = words(hyp);
+  if (!r.length) return h.length ? 1 : 0;
+  let prev = Array.from({ length: h.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= r.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= h.length; j++)
+      cur.push(Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (r[i - 1] !== h[j - 1] ? 1 : 0)));
+    prev = cur;
+  }
+  return prev[h.length] / r.length;
+}
+
+const SPEAK_CHECKS = [
+  ["markdown", /(\*\*|__|`|^\s*#{1,6}\s|^\s*[-*\u2022]\s|^\s*\d+\.\s)/m, "markdown or bullets: a voice reads the symbols or drops the structure"],
+  ["url_or_email", /(https?:\/\/|www\.|\b[\w.+-]+@[\w-]+\.[\w.]+)/i, "URL or email: spelled out letter by letter"],
+  ["long_number", /\d[\d\s().-]{6,}\d/, "long number: read as digits or one huge number"],
+  ["symbol", /[$\u20ac\u00a3\u20b9%&]/, "symbol (currency, %, &): pronunciation varies"],
+  ["abbreviation", /\b(?:Dr|Mr|Mrs|Ms|St|Ave|Rd|vs|etc|approx)\./, "abbreviation with a period: read wrong"],
+  ["parenthetical", /\([^)]{3,}\)/, "parenthetical: cannot be spoken naturally"],
+];
+function speakabilityIssues(text, maxWords = 30) {
+  text = text || "";
+  const out = SPEAK_CHECKS.filter(c => c[1].test(text)).map(c => ({ code: c[0], detail: c[2] }));
+  if (/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(text)) out.push({ code: "emoji", detail: "emoji: skipped or read as a long description" });
+  const longest = Math.max(0, ...text.trim().split(/(?<=[.!?])\s+/).filter(Boolean).map(s => s.split(/\s+/).length));
+  if (longest > maxWords) out.push({ code: "long_sentence", detail: longest + "-word sentence: callers cannot re-read it" });
+  return out;
+}
+function unspeakableRate(replies) {
+  return replies.length ? replies.filter(r => speakabilityIssues(r).length).length / replies.length : 0;
+}
+
+function policyFindings(run, rules) {
+  if (!rules) return [];
+  const calls = run.tool_calls || [], names = calls.map(c => c.name), found = [];
+  for (const t of rules.forbidden_tools || [])
+    if (names.includes(t)) found.push({ kind: "forbidden_tool", detail: "called forbidden tool '" + t + "'", action: "block" });
+  if (rules.max_tool_calls != null && names.length > rules.max_tool_calls)
+    found.push({ kind: "too_many_tool_calls", detail: names.length + " tool calls (limit " + rules.max_tool_calls + ")", action: "block" });
+  for (const lim of rules.tool_arg_limits || [])
+    for (const c of calls) {
+      if (c.name !== lim.tool) continue;
+      const raw = (c.arguments || {})[lim.arg];
+      if (raw === undefined || raw === null || raw === "") continue;
+      const v = Number(raw);
+      if (Number.isNaN(v)) continue;
+      if (lim.max != null && v > lim.max)
+        found.push({ kind: "arg_over_limit", detail: lim.tool + "." + lim.arg + "=" + v + " is over " + lim.max, action: lim.action || "block" });
+    }
+  const text = run.output || "";
+  for (const claim of rules.claims_need_tool || []) {
+    if (names.includes(claim.tool)) continue;
+    for (const p of claim.say || []) {
+      let hit = false;
+      try { hit = new RegExp(p, "i").test(text); } catch (e) { hit = false; }
+      if (hit) { found.push({ kind: "ungrounded_claim", detail: "says it did something matching '" + p + "' but never called '" + claim.tool + "'", action: claim.action || "block" }); break; }
+    }
+  }
+  return found;
+}
+function auditRuns(runs, rules) {
+  const flagged = [], byKind = {};
+  let needsHuman = 0, blocked = 0;
+  runs.forEach((run, i) => {
+    const fs = policyFindings(run, rules);
+    if (!fs.length) return;
+    flagged.push({ index: i, input: run.input || "", findings: fs });
+    if (fs.some(f => f.action === "needs_human")) needsHuman++;
+    if (fs.some(f => f.action === "block")) blocked++;
+    fs.forEach(f => { byKind[f.kind] = (byKind[f.kind] || 0) + 1; });
+  });
+  return { total: runs.length, flagged, needsHuman, blocked, byKind };
+}
+
+function totalMs(r) {
+  if (r.first_audio_ms) return Number(r.first_audio_ms);
+  return STAGES.reduce((s, k) => s + (Number(r[k]) || 0), 0);
+}
+function rowKey(r, i) { return String(r.call_id == null ? "" : r.call_id) + "|" + (r.turn == null ? i : r.turn); }
+function pctChange(o, n) { return o === 0 ? (n === 0 ? 0 : Infinity) : 100 * (n - o) / o; }
+function voiceCompare(oldRows, newRows, budget) {
+  const om = new Map(oldRows.map((r, i) => [rowKey(r, i), r])), nm = new Map(newRows.map((r, i) => [rowKey(r, i), r]));
+  const pairs = [...om.keys()].filter(k => nm.has(k)).map(k => [om.get(k), nm.get(k)]);
+  if (!pairs.length) throw new Error("No matching (call_id, turn) pairs between the two recordings");
+  const n = pairs.length, rate = xs => xs.filter(Boolean).length / n, stages = {};
+  for (const name of [...STAGES, "total"]) {
+    const get = name === "total" ? totalMs : (r => Number(r[name]) || 0);
+    const o = pairs.map(p => get(p[0])), nw = pairs.map(p => get(p[1]));
+    stages[name] = { oldP50: percentile(o, 50), newP50: percentile(nw, 50), oldP95: percentile(o, 95), newP95: percentile(nw, 95) };
+  }
+  const wers = pairs.map(p => wer(p[0].user_transcript, p[1].user_transcript));
+  const examples = [];
+  pairs.forEach(([a, b]) => {
+    const ia = speakabilityIssues(a.agent_transcript), ib = speakabilityIssues(b.agent_transcript);
+    if (ib.length && !ia.length && examples.length < 5) examples.push({ call: a.call_id, turn: a.turn, issue: ib[0].code, text: (b.agent_transcript || "").slice(0, 80) });
+  });
+  return {
+    n, budget, stages, meanWer: wers.reduce((s, x) => s + x, 0) / n, heardDifferently: wers.filter(w => w > 0).length,
+    overOld: rate(pairs.map(p => totalMs(p[0]) > budget)), overNew: rate(pairs.map(p => totalMs(p[1]) > budget)),
+    intOld: rate(pairs.map(p => !!p[0].interrupted)), intNew: rate(pairs.map(p => !!p[1].interrupted)),
+    unspOld: unspeakableRate(pairs.map(p => p[0].agent_transcript || "")), unspNew: unspeakableRate(pairs.map(p => p[1].agent_transcript || "")),
+    examples,
+  };
+}
+function voiceEvaluate(r, o = {}) {
+  const maxWer = o.maxWer ?? 0.10, maxInc = o.maxP95Increase ?? 20, minAbs = o.minAbsMs ?? 50, fails = [];
+  if (r.meanWer > maxWer) fails.push("transcripts drifted: mean WER " + (r.meanWer * 100).toFixed(1) + "% > " + (maxWer * 100).toFixed(1) + "%");
+  const t = r.stages.total, ch = pctChange(t.oldP95, t.newP95);
+  if (ch > maxInc && (t.newP95 - t.oldP95) >= minAbs)
+    fails.push("p95 response delay " + Math.round(t.oldP95) + "ms -> " + Math.round(t.newP95) + "ms (+" + Math.round(ch) + "%)");
+  if (r.overNew - r.overOld > 0.05) fails.push("turns slower than " + r.budget + "ms went " + Math.round(r.overOld * 100) + "% -> " + Math.round(r.overNew * 100) + "%");
+  if (r.unspNew - r.unspOld > 0.05) fails.push("replies a text-to-speech voice would read badly: " + Math.round(r.unspOld * 100) + "% -> " + Math.round(r.unspNew * 100) + "%");
+  if (r.intNew - r.intOld > 0.05) fails.push("callers talk over the agent more: " + Math.round(r.intOld * 100) + "% -> " + Math.round(r.intNew * 100) + "%");
+  return fails;
+}
+// ==CORE END==
+
+// ---------- demo data ----------
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function pick(r, a) { return a[Math.floor(r() * a.length)]; }
+function demoPolicy() {
+  const r = rng(11), rows = [];
+  for (let i = 0; i < 40; i++) {
+    const order = "ORD-" + (1001 + Math.floor(r() * 10)), amount = pick(r, [18, 25, 40, 55, 75, 120, 480]), kind = pick(r, ["refund", "refund", "refund", "lookup", "claim_only"]);
+    let calls = [], out = "Happy to help.", input = "refund " + order;
+    if (kind === "refund") { calls = [{ name: "lookup_order", arguments: { order_id: order } }, { name: "issue_refund", arguments: { order_id: order, amount } }]; out = "Done, I refunded " + amount + " dollars for " + order + "."; }
+    else if (kind === "lookup") { calls = [{ name: "lookup_order", arguments: { order_id: order } }]; out = order + " is on its way."; input = "where is " + order; }
+    else out = "Your refund has been issued for " + order + ".";
+    rows.push({ input, output: out, tool_calls: calls });
+  }
+  const rules = { forbidden_tools: ["delete_order"], max_tool_calls: 3,
+    tool_arg_limits: [{ tool: "issue_refund", arg: "amount", max: 100, action: "needs_human" }],
+    claims_need_tool: [{ say: ["refund (has been |was )?(issued|processed)"], tool: "issue_refund" }] };
+  return { runs: rows.map(x => JSON.stringify(x)).join("\n"), rules: JSON.stringify(rules, null, 2) };
+}
+function demoVoice() {
+  const r = rng(7), U = [["i want to cancel my subscription", "Sure, I can help you cancel that."], ["what is my account balance", "Your balance is forty two dollars."],
+    ["please refund order one zero zero three", "I have started your refund."], ["can you speak to a human agent", "Transferring you to a person now."], ["my card was declined yesterday", "I am sorry, let me check that."]];
+  const ri = (a, b) => a + Math.floor(r() * (b - a + 1)), oldR = [], newR = [];
+  for (let c = 0; c < 10; c++) for (let t = 0; t < 4; t++) {
+    const [heard, said] = pick(r, U), stt = ri(120, 220), llm = ri(280, 480), tts = ri(90, 180), w = heard.split(" ");
+    oldR.push({ call_id: "c" + c, turn: t, user_transcript: heard, agent_transcript: said, stt_ms: stt, llm_ms: llm, tts_ms: tts, interrupted: r() < 0.05 });
+    if (r() < 0.25 && w.length > 3) w[Math.floor(r() * w.length)] = "uh";
+    const md = r() < 0.3 ? "**" + said + "** See https://example.com/help (takes 3-5 days)." : said;
+    newR.push({ call_id: "c" + c, turn: t, user_transcript: w.join(" "), agent_transcript: md, stt_ms: stt + ri(-20, 20), llm_ms: llm + ri(-30, 30), tts_ms: tts + ri(180, 320), interrupted: r() < 0.12 });
+  }
+  return { oldv: oldR.map(x => JSON.stringify(x)).join("\n"), newv: newR.map(x => JSON.stringify(x)).join("\n") };
+}
+
+// ---------- UI ----------
+if (typeof document !== "undefined") {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const card = (v, l) => '<div class="card"><b>' + v + "</b><span>" + l + "</span></div>";
+  const pct = x => Math.round(x * 100) + "%";
+
+  function show(tab) {
+    $("policy").hidden = tab !== "policy"; $("voice").hidden = tab !== "voice";
+    $("tabPolicy").className = tab === "policy" ? "on" : ""; $("tabVoice").className = tab === "voice" ? "on" : "";
+  }
+  $("tabPolicy").onclick = () => show("policy"); $("tabVoice").onclick = () => show("voice");
+
+  $("demoPolicy").onclick = () => { const d = demoPolicy(); $("runs").value = d.runs; $("rules").value = d.rules; $("runAudit").click(); };
+  $("runAudit").onclick = () => {
+    const out = $("policyOut");
+    try {
+      const runs = parseJsonl($("runs").value), rules = JSON.parse($("rules").value || "{}");
+      if (!runs.length) throw new Error("Paste some runs first (or press Load demo data)");
+      const a = auditRuns(runs, rules);
+      let h = '<div class="verdict ' + (a.blocked ? "bad" : "ok") + '">' + (a.blocked ? "BLOCKING FINDINGS: " + a.blocked + " run(s) would have been stopped" : "No blocking findings") + "</div>";
+      h += '<div class="cards">' + card(a.total, "runs audited") + card(a.flagged.length + " (" + pct(a.flagged.length / a.total) + ")", "runs with a finding") + card(a.needsHuman, "would wait for a human") + card(a.blocked, "would be blocked") + "</div>";
+      if (a.flagged.length) {
+        h += '<div class="tablewrap"><table><tr><th>#</th><th>Input</th><th>Finding</th><th>Action</th></tr>';
+        a.flagged.slice(0, 60).forEach(f => f.findings.forEach(x => {
+          h += "<tr><td>" + f.index + "</td><td>" + esc(f.input.slice(0, 70)) + "</td><td>" + esc(x.detail) + '</td><td><span class="tag ' + x.action + '">' + esc(x.action) + "</span></td></tr>";
+        }));
+        h += "</table></div>";
+      }
+      out.innerHTML = h;
+    } catch (e) { out.innerHTML = '<div class="err">' + esc(e.message) + "</div>"; }
+  };
+
+  $("demoVoice").onclick = () => { const d = demoVoice(); $("oldv").value = d.oldv; $("newv").value = d.newv; $("runVoice").click(); };
+  $("runVoice").onclick = () => {
+    const out = $("voiceOut");
+    try {
+      const r = voiceCompare(parseJsonl($("oldv").value), parseJsonl($("newv").value), Number($("budget").value) || 800), fails = voiceEvaluate(r);
+      let h = '<div class="verdict ' + (fails.length ? "bad" : "ok") + '">' + (fails.length ? "NOT SAFE TO SHIP" : "SAFE TO SHIP") + "</div>";
+      h += '<div class="cards">' + card(r.n, "turns compared") + card((r.meanWer * 100).toFixed(1) + "%", "mean transcript drift (WER)") + card(pct(r.overOld) + " to " + pct(r.overNew), "turns over " + r.budget + "ms") + card(pct(r.unspOld) + " to " + pct(r.unspNew), "replies hard to speak") + "</div>";
+      h += '<div class="tablewrap"><table><tr><th>Stage</th><th>p50 old</th><th>p50 new</th><th>p95 old</th><th>p95 new</th></tr>';
+      for (const [k, s] of Object.entries(r.stages)) h += "<tr><td>" + k + "</td><td>" + Math.round(s.oldP50) + "</td><td>" + Math.round(s.newP50) + "</td><td>" + Math.round(s.oldP95) + "</td><td>" + Math.round(s.newP95) + "</td></tr>";
+      h += "</table></div>";
+      if (fails.length) h += "<h2>Why it failed</h2><ul>" + fails.map(f => "<li>" + esc(f) + "</li>").join("") + "</ul>";
+      if (r.examples.length) h += "<h2>New replies that sound bad aloud</h2><ul>" + r.examples.map(e => "<li>call " + esc(e.call) + " turn " + esc(e.turn) + " (" + esc(e.issue) + "): " + esc(e.text) + "</li>").join("") + "</ul>";
+      out.innerHTML = h;
+    } catch (e) { out.innerHTML = '<div class="err">' + esc(e.message) + "</div>"; }
+  };
+}
+</script>
+</body>
+</html>
