@@ -30,6 +30,8 @@ import random
 import re
 import sys
 
+from .speakable import speakability_issues, unspeakable_rate
+
 STAGES = ("stt_ms", "llm_ms", "tts_ms")
 
 
@@ -127,13 +129,20 @@ def compare(old_rows, new_rows, budget_ms=800):
         "over_budget_new": rate([total_ms(b) > budget_ms for _, b in pairs]),
         "interrupt_old": rate([bool(a.get("interrupted")) for a, _ in pairs]),
         "interrupt_new": rate([bool(b.get("interrupted")) for _, b in pairs]),
+        "unspeakable_old": unspeakable_rate(a.get("agent_transcript", "") for a, _ in pairs),
+        "unspeakable_new": unspeakable_rate(b.get("agent_transcript", "") for _, b in pairs),
+        "unspeakable_examples": [{"call_id": k[0], "turn": k[1], "issue": i[0]["code"],
+                                  "text": b.get("agent_transcript", "")[:80]}
+                                 for (a, b), k in zip(pairs, keys)
+                                 for i in [speakability_issues(b.get("agent_transcript", ""))]
+                                 if i and not speakability_issues(a.get("agent_transcript", ""))][:5],
         "slowest_regressions": [{"call_id": k[0], "turn": k[1], "added_ms": round(d)}
                                 for d, k in worst if d > 0],
     }
 
 
 def evaluate(result, max_wer=0.10, max_p95_increase=20.0, max_over_budget_increase=0.05,
-             min_abs_ms=50.0):
+             min_abs_ms=50.0, max_unspeakable_increase=0.05):
     """Return a list of failure messages. Empty list = SAFE."""
     fails = []
     if result["mean_wer"] > max_wer:
@@ -147,6 +156,9 @@ def evaluate(result, max_wer=0.10, max_p95_increase=20.0, max_over_budget_increa
     if over > max_over_budget_increase:
         fails.append(f"turns slower than {result['budget_ms']}ms went "
                      f"{result['over_budget_old']:.0%} -> {result['over_budget_new']:.0%}")
+    if result.get("unspeakable_new", 0) - result.get("unspeakable_old", 0) > max_unspeakable_increase:
+        fails.append(f"replies a text-to-speech voice would read badly: "
+                     f"{result['unspeakable_old']:.0%} -> {result['unspeakable_new']:.0%}")
     if result["interrupt_new"] - result["interrupt_old"] > 0.05:
         fails.append(f"callers talk over the agent more: "
                      f"{result['interrupt_old']:.0%} -> {result['interrupt_new']:.0%}")
@@ -166,7 +178,13 @@ def to_markdown(result, fails):
               f"({result['turns_with_heard_differently']} turns heard differently)",
               f"- Agent replies that changed a lot: {result['agent_reply_changed_a_lot']}",
               f"- Turns over budget: {result['over_budget_old']:.0%} -> {result['over_budget_new']:.0%}",
-              f"- Caller interruptions: {result['interrupt_old']:.0%} -> {result['interrupt_new']:.0%}"]
+              f"- Caller interruptions: {result['interrupt_old']:.0%} -> {result['interrupt_new']:.0%}",
+              f"- Replies hard to speak (markdown, URLs, long numbers...): "
+              f"{result.get('unspeakable_old', 0):.0%} -> {result.get('unspeakable_new', 0):.0%}"]
+    if result.get("unspeakable_examples"):
+        lines += ["", "New replies that sound bad aloud:"]
+        lines += [f"- call {e['call_id']} turn {e['turn']} ({e['issue']}): {e['text']!r}"
+                  for e in result["unspeakable_examples"]]
     if result["slowest_regressions"]:
         lines += ["", "Slowest new turns:"]
         lines += [f"- call {r['call_id']} turn {r['turn']}: +{r['added_ms']}ms"
@@ -197,59 +215,3 @@ def make_demo(out_dir, calls=10, turns=4, seed=7):
             heard, said = rng.choice(UTTERANCES)
             stt, llm, tts = rng.randint(120, 220), rng.randint(280, 480), rng.randint(90, 180)
             old_rows.append({"call_id": f"c{c}", "turn": t, "user_transcript": heard,
-                             "agent_transcript": said, "stt_ms": stt, "llm_ms": llm,
-                             "tts_ms": tts, "interrupted": rng.random() < 0.05})
-            words = heard.split()
-            if rng.random() < 0.25 and len(words) > 3:      # candidate STT mishears a word
-                words[rng.randrange(len(words))] = "uh"
-            slow_tts = tts + rng.randint(180, 320)          # candidate TTS is slower
-            new_rows.append({"call_id": f"c{c}", "turn": t, "user_transcript": " ".join(words),
-                             "agent_transcript": said, "stt_ms": stt + rng.randint(-20, 20),
-                             "llm_ms": llm + rng.randint(-30, 30), "tts_ms": slow_tts,
-                             "interrupted": rng.random() < 0.12})
-    for name, rows in (("old.jsonl", old_rows), ("new.jsonl", new_rows)):
-        with open(os.path.join(out_dir, name), "w", encoding="utf-8") as f:
-            f.write("\n".join(json.dumps(r) for r in rows) + "\n")
-    print(f"wrote {len(old_rows)} turns each to {out_dir}/old.jsonl and {out_dir}/new.jsonl")
-
-
-# ---------- command line ----------
-
-def main(argv=None):
-    ap = argparse.ArgumentParser(prog="replaylens.voice", description=__doc__.split("\n")[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    d = sub.add_parser("demo", help="write sample old.jsonl / new.jsonl")
-    d.add_argument("out_dir")
-    c = sub.add_parser("compare", help="compare two voice recordings")
-    c.add_argument("old")
-    c.add_argument("new")
-    c.add_argument("--budget-ms", type=float, default=800, help="max comfortable reply delay")
-    c.add_argument("--max-wer", type=float, default=0.10)
-    c.add_argument("--max-p95-increase", type=float, default=20.0, help="percent")
-    c.add_argument("--min-abs-ms", type=float, default=50.0, help="ignore smaller p95 changes")
-    c.add_argument("--md", default=None, help="also write the report as markdown")
-    c.add_argument("--json", default=None, help="also write the raw numbers as JSON")
-    a = ap.parse_args(argv)
-
-    if a.cmd == "demo":
-        make_demo(a.out_dir)
-        return 0
-    try:
-        result = compare(load_calls(a.old), load_calls(a.new), a.budget_ms)
-    except (OSError, ValueError) as exc:
-        print(f"usage error: {type(exc).__name__}: {exc}", file=sys.stderr)
-        return 2
-    fails = evaluate(result, a.max_wer, a.max_p95_increase, min_abs_ms=a.min_abs_ms)
-    report = to_markdown(result, fails)
-    print(report)
-    if a.md:
-        with open(a.md, "w", encoding="utf-8") as f:
-            f.write(report)
-    if a.json:
-        with open(a.json, "w", encoding="utf-8") as f:
-            json.dump({"result": result, "failures": fails}, f, indent=2)
-    return 1 if fails else 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
