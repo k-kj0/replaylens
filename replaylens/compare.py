@@ -2,6 +2,8 @@
 import difflib
 import json
 
+from .policy import policy_violations
+
 
 def tool_names(run):
     return [c["name"] for c in run.get("tool_calls", [])]
@@ -37,7 +39,8 @@ def compare_run(old, new, rules=None, judge=None):
     old_bad, new_bad = rule_violations(old.get("output"), rules), rule_violations(new.get("output"), rules)
     fresh_bad = [b for b in new_bad if b not in old_bad]
     reasons += [f"rule: {b}" for b in fresh_bad]
-
+    old_pol, new_pol = policy_violations(old, rules), policy_violations(new, rules)
+    reasons += [f"policy: {p}" for p in new_pol if p not in old_pol]
     sim = difflib.SequenceMatcher(None, old.get("output", ""), new.get("output", "")).ratio()
     verdict = None
     if judge and sim < 0.98:
