@@ -1,0 +1,12 @@
+{
+  "must_not_contain": ["guarantee", "legal advice"],
+  "forbidden_tools": ["delete_order"],
+  "max_tool_calls": 3,
+  "tool_arg_limits": [
+    {"tool": "issue_refund", "arg": "amount", "max": 60, "action": "needs_human"}
+  ],
+  "claims_need_tool": [
+    {"say": ["refund (has been |was )?(issued|processed|sent)", "i('ve| have) (issued|processed) (a|your) refund"],
+     "tool": "issue_refund"}
+  ]
+}
