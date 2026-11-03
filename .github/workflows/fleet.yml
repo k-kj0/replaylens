@@ -1,0 +1,29 @@
+name: fleet-report
+on:
+  push:
+    paths:
+      - "fleet/**"
+      - "tests/test_fleet.py"
+      - ".github/workflows/fleet.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - run: python -m pytest tests/test_fleet.py -q
+      - run: python -m fleet demo --out fleet/sample_runs.jsonl
+      - run: python -m fleet report --runs fleet/sample_runs.jsonl --out docs/fleet/index.html
+      - run: python -m fleet alerts --runs fleet/sample_runs.jsonl --out docs/fleet/alerts.json
+      - name: Commit report
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add docs/fleet fleet/sample_runs.jsonl
+          git diff --cached --quiet || (git commit -m "Update fleet report" && git push)
