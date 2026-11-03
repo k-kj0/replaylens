@@ -116,6 +116,22 @@ It exits with code 1 when the new setup is not safe, so it can gate a pull reque
 2. Keep pull requests focused and include tests where relevant.
 3. Run the relevant checks before opening a pull request.
 
+## ReplayLens Fleet
+
+Turns agent run logs into account health, model economics and alerts, using plain SQL over SQLite. No dependencies.
+
+- **Which accounts get a person, which get a program:** a health score per account routes it to a named owner, a nudge program, expansion, or no action.
+- **Model economics:** cost per passing run, pass rate and p95 latency per model.
+- **Alerts:** week-over-week pass-rate drops and quiet accounts. Use `--fail-on critical` to gate CI.
+
+Input is one JSON object per line with `account`, `model`, `ts`, `passed`, `cost_usd`, `latency_ms`. Common alternate names such as `tenant`, `success` and `cost` also work.
+
+    python -m fleet demo
+    python -m fleet report --runs fleet/sample_runs.jsonl --out docs/fleet/index.html
+    python -m fleet alerts --runs your_runs.jsonl --fail-on critical
+
+Live report: docs/fleet/index.html (demo data is synthetic).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
