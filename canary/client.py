@@ -5,12 +5,13 @@ import http.client
 import json
 import os
 import socket
+import sys
 import time
 from urllib.parse import urlparse
 
 
 def _result(**kw):
-    base = {"fail": None, "detail": None, "text": "", "e2e_ms": None, "ttft_ms": None, "ttv_ms": None}
+    base = {"fail": None, "text": "", "e2e_ms": None, "ttft_ms": None, "ttv_ms": None}
     base.update(kw)
     return base
 
@@ -59,10 +60,10 @@ def call_provider(provider, messages, timeout_s=20.0, max_tokens=256):
         resp = conn.getresponse()
         if resp.status != 200:
             err_body = resp.read().decode("utf-8", "replace")[:300]
+            print(f"[DEBUG {provider['name']}] status={resp.status} key_len={len(key)} body={err_body}", file=sys.stderr)
             if resp.status == 429:
-                return _result(fail="http_429", detail=f"429: {err_body}")
-            code_type = "http_5xx" if resp.status >= 500 else "http_4xx"
-            return _result(fail=code_type, detail=f"{resp.status}: {err_body}")
+                return _result(fail="http_429")
+            return _result(fail="http_5xx" if resp.status >= 500 else "http_4xx")
 
         text, ttft, ttv = [], None, None
         while True:
@@ -95,8 +96,8 @@ def call_provider(provider, messages, timeout_s=20.0, max_tokens=256):
                        ttft_ms=ttft, ttv_ms=ttv)
     except (socket.timeout, TimeoutError):
         return _result(fail="timeout")
-    except (OSError, http.client.HTTPException) as exc:
-        return _result(fail="transport", detail=str(exc)[:200])
+    except (OSError, http.client.HTTPException):
+        return _result(fail="transport")
     finally:
         if conn is not None:
             conn.close()
