@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReplayLens Canary</title>
+<style>
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#666; --line:#ddd; --accent:#1f6feb; --bad:#c62828; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111; --fg:#eee; --muted:#9a9a9a; --line:#333; --accent:#58a6ff; --bad:#ff6b6b; }
+  }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; max-width:900px; margin-inline:auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-bottom:16px; }
+  .card h2 { font-size:16px; margin:0 0 8px; }
+  .row { display:flex; gap:24px; flex-wrap:wrap; }
+  .stat b { display:block; font-size:20px; }
+  .stat span { color:var(--muted); font-size:13px; }
+  svg { width:100%; height:80px; display:block; margin-top:10px; }
+  .note { color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<h1>ReplayLens Canary</h1>
+<p class="sub">Scheduled re-runs of the public OB-Inference-Microtasks set. Each point is one run of 29 tasks.</p>
+<div id="app">Loading results...</div>
+<p class="note">With only 29 tasks the intervals are wide. This page shows change over time for one endpoint,
+not a ranking between endpoints. Source: <a href="https://github.com/k-kj0/replaylens">github.com/k-kj0/replaylens</a>.</p>
+<script>
+const URL_RESULTS = "https://raw.githubusercontent.com/k-kj0/replaylens/main/canary/data/results.jsonl";
+
+function wilson(k, n, z = 1.96) {
+  if (!n) return [0, 1];
+  const p = k / n, d = 1 + z * z / n;
+  const c = (p + z * z / (2 * n)) / d;
+  const m = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d;
+  return [Math.max(0, c - m), Math.min(1, c + m)];
+}
+function median(xs) {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b), h = s.length >> 1;
+  return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
+}
+function spark(values, color, lo, hi) {
+  if (values.length < 2) return "";
+  const w = 600, h = 80, pad = 6;
+  const pts = values.map((v, i) => {
+    const x = pad + (w - 2 * pad) * i / (values.length - 1);
+    const y = h - pad - (h - 2 * pad) * (v - lo) / ((hi - lo) || 1);
+    return x.toFixed(1) + "," + y.toFixed(1);
+  }).join(" ");
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="${color}" stroke-width="2" points="${pts}"/></svg>`;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+fetch(URL_RESULTS).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); }).then(text => {
+  const rows = text.split("\n").filter(Boolean).map(JSON.parse);
+  if (!rows.length) { document.getElementById("app").textContent = "No runs yet."; return; }
+  const by = {};
+  rows.sort((a, b) => a.ts < b.ts ? -1 : 1).forEach(r => (by[r.provider] = by[r.provider] || []).push(r));
+  let html = "";
+  for (const [name, runs] of Object.entries(by)) {
+    const last = runs[runs.length - 1];
+    const k = last.tasks.filter(t => t.ok).length, n = last.tasks.length;
+    const [lo, hi] = wilson(k, n);
+    const lat = last.tasks.map(t => t.e2e_ms).filter(x => x != null);
+    const fails = last.tasks.filter(t => t.fail).length;
+    const acc = runs.map(r => 100 * r.tasks.filter(t => t.ok).length / r.tasks.length);
+    const p50 = runs.map(r => median(r.tasks.map(t => t.e2e_ms).filter(x => x != null)) || 0);
+    html += `<div class="card"><h2>${esc(name)} <span class="note">${esc(last.model)}</span></h2>
+      <div class="row">
+        <div class="stat"><b>${k} of ${n}</b><span>correct, 95% CI ${(lo * 100).toFixed(0)}% to ${(hi * 100).toFixed(0)}%</span></div>
+        <div class="stat"><b>${lat.length ? Math.round(median(lat)) + " ms" : "n/a"}</b><span>median end to end</span></div>
+        <div class="stat"><b>${fails}</b><span>request failures</span></div>
+        <div class="stat"><b>${runs.length}</b><span>runs</span></div>
+      </div>
+      <div class="note">Accuracy per run (0 to 100%)</div>${spark(acc, "var(--accent)", 0, 100)}
+      <div class="note">Median end to end latency per run (ms)</div>${spark(p50, "var(--bad)", 0, Math.max(...p50, 1))}
+    </div>`;
+  }
+  document.getElementById("app").innerHTML = html;
+}).catch(e => { document.getElementById("app").textContent = "Could not load results: " + e.message; });
+</script>
+</body>
+</html>
