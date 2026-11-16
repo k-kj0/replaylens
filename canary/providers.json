@@ -1,0 +1,4 @@
+[
+  {"name": "groq", "base_url": "https://api.groq.com/openai/v1", "model": "llama-3.1-8b-instant", "key_env": "GROQ_API_KEY"},
+  {"name": "cerebras", "base_url": "https://api.cerebras.ai/v1", "model": "llama3.1-8b", "key_env": "CEREBRAS_API_KEY"}
+]
