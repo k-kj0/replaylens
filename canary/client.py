@@ -30,12 +30,9 @@ def _ensure_json_mention(messages):
 
 def call_provider(provider, messages, timeout_s=20.0, max_tokens=256):
     """One request, no retries. fail is None or timeout, http_429, http_4xx, http_5xx, transport."""
-    key = os.environ.get(provider.get("key_env", ""), "").strip()
-    if not key:
-        return _result(fail="missing_key", detail=f"{provider.get('key_env')} is empty or unset")
-
     url = urlparse(provider["base_url"].rstrip("/") + "/chat/completions")
     cls = http.client.HTTPSConnection if url.scheme == "https" else http.client.HTTPConnection
+    key = os.environ.get(provider.get("key_env", ""), "").strip()
     prepared_messages = _ensure_json_mention(messages)
 
     body = json.dumps({
@@ -43,6 +40,8 @@ def call_provider(provider, messages, timeout_s=20.0, max_tokens=256):
         "messages": prepared_messages,
         "temperature": 0,
         "top_p": 1,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
         "max_tokens": max_tokens,
         "stream": True,
         "response_format": {"type": "json_object"},
